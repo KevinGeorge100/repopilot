@@ -30,3 +30,6 @@ private code.
 
 ## Status
 See `ROADMAP.md`. Tests: `uv run pytest` (49), `cd web && npm run lint && npm run build`.
+
+## License
+MIT. See `LICENSE`.
