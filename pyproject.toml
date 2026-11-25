@@ -1,0 +1,33 @@
+[project]
+name = "repopilot"
+version = "0.1.0"
+description = "Cited code intelligence for GitHub repos: ask questions, get answers whose citations are verified."
+readme = "README.md"
+authors = [
+    { name = "Kevin George" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=2.14.0",
+    "fastapi>=0.165.0",
+    "fastembed>=0.9.1",
+    "numpy>=2.5.5",
+    "pydantic>=2.14.4",
+    "tree-sitter>=0.27.0",
+    "tree-sitter-language-pack>=1.25.2",
+    "typer>=0.29.2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+repopilot = "repopilot.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
