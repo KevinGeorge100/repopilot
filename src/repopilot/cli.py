@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import typer
@@ -13,7 +14,12 @@ from .toolbox import ToolRunner
 from .tools import search_code
 
 app = typer.Typer(help="RepoPilot: cited code intelligence for any GitHub repo.")
+eval_app = typer.Typer(help="Run and report the evaluation suite (see evals/).")
+app.add_typer(eval_app, name="eval")
 WORKDIR = Path(".repopilot")
+EVAL_DATASET = Path("evals/data/questions.json")
+EVAL_WORKDIR = Path(".repopilot-eval")
+EVAL_RESULTS = Path("evals/results")
 
 
 def _name(url: str) -> str:
@@ -149,6 +155,141 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
     uvicorn.run("repopilot.server:app_factory", factory=True, host=host, port=port)
+
+
+def _load_eval_dataset(path: Path):
+    from .evals.dataset import DatasetError, load_dataset
+
+    try:
+        return load_dataset(path)
+    except DatasetError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1) from e
+
+
+@eval_app.command("verify")
+def eval_verify(dataset: Path = EVAL_DATASET, workdir: Path = EVAL_WORKDIR) -> None:
+    """Check out each repo at its pinned commit and verify every gold range and anchor."""
+    from .evals.dataset import ensure_checkout, verify_gold
+
+    ds = _load_eval_dataset(dataset)
+    roots = {n: ensure_checkout(spec, workdir / "repos" / n) for n, spec in ds.repos.items()}
+    problems = verify_gold(ds, roots)
+    for p in problems:
+        typer.echo(f"PROBLEM {p}", err=True)
+    gold = sum(len(q.gold) for q in ds.questions)
+    typer.echo(f"{len(ds.questions)} questions, {gold} gold ranges, {len(problems)} problems")
+    if problems:
+        raise typer.Exit(1)
+
+
+@eval_app.command("prepare")
+def eval_prepare(dataset: Path = EVAL_DATASET, workdir: Path = EVAL_WORKDIR, force: bool = False) -> None:
+    """Check out and index every eval repo (reuses an index built for the same commit)."""
+    from .evals.runner import prepare_repos
+
+    prepare_repos(_load_eval_dataset(dataset), workdir, FastEmbedder(), typer.echo, force)
+
+
+@eval_app.command("run")
+def eval_run(
+    label: str,
+    dataset: Path = EVAL_DATASET,
+    workdir: Path = EVAL_WORKDIR,
+    provider: str | None = None,
+    model: str | None = None,
+    k: int = 8,
+    max_chars: int = 12_000,
+    max_steps: int = 8,
+    min_interval: float = 0.0,
+    token_cap: int | None = None,
+    retries: int = 1,
+    retry_wait: float = 5.0,
+    abort_after: int = 5,
+    only: str | None = None,
+    limit: int | None = None,
+    fresh: bool = False,
+    out: Path | None = None,
+) -> None:
+    """Run every question through the agent and write traces to evals/results/<label>/."""
+    from .evals.runner import RunConfig, prepare_repos, run_eval
+
+    ds = _load_eval_dataset(dataset)
+    try:
+        probe = make_llm(provider, model)  # fail fast on a missing key
+    except RuntimeError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1) from e
+    # Record what actually ran, not "default", so a report is reproducible.
+    eff_provider = (provider or os.environ.get("REPOPILOT_PROVIDER") or "anthropic").lower()
+    eff_model = getattr(probe, "model", None) or model
+    embedder = FastEmbedder()
+    handles, stats = prepare_repos(ds, workdir, embedder, typer.echo)
+    cfg = RunConfig(
+        label, eff_provider, eff_model, k, max_chars, max_steps,
+        retries=retries, retry_wait_s=retry_wait, abort_after=abort_after, min_interval_s=min_interval, token_cap=token_cap,
+    )
+    run_dir = out or EVAL_RESULTS / label
+    traces = run_eval(
+        ds, handles, embedder, lambda: make_llm(provider, model), cfg, run_dir,
+        index_stats=stats, resume=not fresh, only=set(only.split(",")) if only else None, limit=limit, log=typer.echo,
+    )
+    passed = sum(t["score"]["passed"] for t in traces)
+    typer.echo(f"\n{passed}/{len(traces)} passed. Traces in {run_dir}. Next: repopilot eval report {run_dir}")
+
+
+@eval_app.command("rescore")
+def eval_rescore(run_dir: Path, dataset: Path = EVAL_DATASET) -> None:
+    """Re-grade a finished run against the current dataset (no model calls). The original traces are kept."""
+    import json
+    import shutil
+
+    from .evals.runner import read_traces, rescore_traces
+
+    ds = _load_eval_dataset(dataset)
+    traces_path = run_dir / "traces.jsonl"
+    traces = read_traces(traces_path)
+    if not traces:
+        typer.echo(f"error: no traces in {run_dir}", err=True)
+        raise typer.Exit(1)
+    backup = run_dir / "traces.original.jsonl"
+    if not backup.exists():
+        shutil.copyfile(traces_path, backup)
+    before = sum(t["score"]["passed"] for t in traces)
+    rescored = rescore_traces(ds, traces)
+    traces_path.write_text("".join(json.dumps(t, ensure_ascii=False) + "\n" for t in rescored))
+    cfg_path = run_dir / "config.json"
+    if cfg_path.exists():
+        cfg = json.loads(cfg_path.read_text())
+        cfg["dataset_version"] = ds.version
+        cfg["rescored"] = True
+        cfg_path.write_text(json.dumps(cfg, indent=1))
+    after = sum(t["score"]["passed"] for t in rescored)
+    typer.echo(f"re-scored {len(rescored)} questions against dataset v{ds.version}: {before} passed before, {after} now")
+
+
+@eval_app.command("report")
+def eval_report(
+    run_dir: Path,
+    baseline: Path | None = None,
+    price_in: float | None = None,
+    price_out: float | None = None,
+    write: Path | None = None,
+) -> None:
+    """Render a run as markdown. Prices are dollars per million tokens (optional). --baseline adds a comparison."""
+    from .evals.report import load_run, render_markdown
+
+    traces, cfg = load_run(run_dir)
+    if not traces:
+        typer.echo(f"error: no traces in {run_dir}", err=True)
+        raise typer.Exit(1)
+    md = render_markdown(traces, cfg, price_in, price_out, load_run(baseline) if baseline else None)
+    if write:
+        write.parent.mkdir(parents=True, exist_ok=True)
+        write.write_text(md)
+        typer.echo(f"wrote {write}")
+    else:
+        typer.echo(md)
 
 
 if __name__ == "__main__":
