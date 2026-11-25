@@ -1,0 +1,136 @@
+@import "tailwindcss";
+@import "@fontsource-variable/schibsted-grotesk";
+@import "@fontsource-variable/newsreader";
+@import "@fontsource-variable/jetbrains-mono";
+
+:root {
+  --paper: #edf0f4;
+  --sheet: #f8f9fb;
+  --ink: #12182b;
+  --graphite: #4a5368;
+  --rule: #d3d9e3;
+  --cobalt: #2f4bff;
+  --cobalt-ink: #1d34c9;
+  --marker: #ffe15a;
+  --alert: #cc3d2b;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-graphite: var(--graphite);
+  --color-rule: var(--rule);
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-ink: var(--cobalt-ink);
+  --color-marker: var(--marker);
+  --color-alert: var(--alert);
+  --font-sans: "Schibsted Grotesk Variable", system-ui, sans-serif;
+  --font-serif: "Newsreader Variable", Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+html {
+  background: var(--paper);
+}
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Answer prose: the reading surface. Serif, generous leading, <70ch. */
+.prose-answer {
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  line-height: 1.7;
+  max-width: 68ch;
+  color: var(--ink);
+}
+.prose-answer p { margin: 0 0 0.9em; }
+.prose-answer h1, .prose-answer h2, .prose-answer h3 {
+  font-family: var(--font-sans);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+  font-size: 1.05rem;
+}
+.prose-answer ul, .prose-answer ol { margin: 0 0 0.9em; padding-left: 1.3em; }
+.prose-answer ul { list-style: disc; }
+.prose-answer ol { list-style: decimal; }
+.prose-answer li { margin: 0.3em 0; padding-left: 0.2em; }
+.prose-answer strong { font-weight: 650; }
+.prose-answer code:not(.cite) {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: #e1e6ee;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.prose-answer pre {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  background: #e1e6ee;
+  padding: 0.8rem 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0 0 1em;
+}
+.prose-answer pre code { background: none; padding: 0; }
+
+/* Citation chips: the link between prose and evidence. */
+.cite {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.28em 0.5em;
+  margin: 0 0.1em;
+  border-radius: 5px;
+  border: 1px solid var(--cobalt);
+  color: var(--cobalt-ink);
+  background: #fff;
+  vertical-align: 0.08em;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.cite:hover, .cite[data-active="true"] { background: var(--marker); border-color: #c9ac1c; color: var(--ink); }
+.cite[data-status="bad"] {
+  border-color: var(--alert);
+  color: var(--alert);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* Highlighter pen: cited lines in the evidence panel. */
+.code-line { display: grid; grid-template-columns: 3.4rem 1fr; }
+.code-line .num { text-align: right; padding-right: 0.9rem; color: #8a93a6; user-select: none; }
+.code-line .txt { white-space: pre; padding-right: 1rem; }
+.code-line[data-hit="true"] .txt,
+.code-line[data-hit="true"] .num {
+  background-image: linear-gradient(var(--marker), var(--marker));
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: var(--ink);
+  animation: mark-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes mark-in { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+
+@keyframes step-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.step-in { animation: step-in 220ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .code-line[data-hit="true"] .txt, .code-line[data-hit="true"] .num, .step-in { animation: none; }
+}
