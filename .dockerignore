@@ -1,0 +1,6 @@
+.venv
+.repopilot
+web
+.git
+__pycache__
+*.db
