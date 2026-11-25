@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .embed import Embedder
 from .ingest import chunk_repo
-from .store import Store, path_prior
+from .store import EMBED_CHARS, Store, path_prior
 
 MAX_CHUNKS = 2500
 
@@ -25,6 +25,7 @@ def build_index(
     embedder: Embedder,
     progress: Callable[[str, int, int], None] | None = None,
     max_chunks: int = MAX_CHUNKS,
+    embed_chars: int = EMBED_CHARS,
 ) -> IndexSummary:
     def report(phase: str, done: int = 0, total: int = 0) -> None:
         if progress:
@@ -38,6 +39,6 @@ def build_index(
     db.parent.mkdir(parents=True, exist_ok=True)
     db.unlink(missing_ok=True)
     store = Store(db)
-    store.add(chunks, embedder, progress=lambda d, t: report("embedding", d, t))
+    store.add(chunks, embedder, progress=lambda d, t: report("embedding", d, t), embed_chars=embed_chars)
     store.db.close()
     return IndexSummary(len(chunks), found, found > len(chunks))

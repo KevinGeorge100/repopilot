@@ -73,3 +73,53 @@ def test_search_results_are_line_numbered(repo):
     _, store, emb = repo
     text = search_code(store, emb, "parse_args")[0]["text"]
     assert text.splitlines()[0].startswith("1: def parse_args")
+
+
+# ---- name-based retrieval ------------------------------------------------------
+def _store_with(chunks):
+    emb, store = HashEmbedder(), Store()
+    store.add(chunks, emb)
+    return store, emb
+
+
+def test_a_definition_outranks_docs_and_tests_that_merely_mention_the_name():
+    from repopilot.chunker import Chunk
+
+    chunks = [
+        Chunk("docs/prompts.md", 1, 5, "prompt prompt prompt: how to prompt the user, prompt text, prompt options", "window"),
+        Chunk("tests/test_termui.py", 1, 9, "def test_prompt():\n    prompt('x')\n    prompt('y')\n    prompt('z')", "definition", "test_prompt"),
+        Chunk("src/termui.py", 100, 140, "def prompt(text, default=None):\n    '''Ask for input.'''\n    return input(text)", "definition", "prompt"),
+        Chunk("src/other.py", 1, 5, "def unrelated():\n    return 1", "definition", "unrelated"),
+    ]
+    store, emb = _store_with(chunks)
+    hits = store.search("def prompt(", emb, k=3)
+    assert hits[0].chunk.path == "src/termui.py" and hits[0].chunk.symbol == "prompt"
+
+
+def test_symbol_survives_a_round_trip_and_unrelated_names_add_nothing():
+    from repopilot.chunker import Chunk
+
+    store, emb = _store_with([Chunk("a.py", 1, 3, "def foo():\n    return 1", "definition", "foo")])
+    assert store.has_symbols and store.search("foo", emb)[0].chunk.symbol == "foo"
+    assert store.search("something else entirely", emb)[0].chunk.symbol == "foo"  # still found by the other signals
+
+
+def test_an_index_built_before_symbols_existed_still_searches(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "old.db"
+    con = sqlite3.connect(db)
+    con.executescript(
+        """CREATE TABLE chunks(id INTEGER PRIMARY KEY, path TEXT, start_line INT, end_line INT, kind TEXT, text TEXT, vec BLOB);
+           CREATE VIRTUAL TABLE chunks_fts USING fts5(text, path, content='chunks', content_rowid='id', tokenize="unicode61 tokenchars '_'");"""
+    )
+    emb = HashEmbedder()
+    vec = emb.embed(["def foo(): return 1"])[0].tobytes()
+    con.execute("INSERT INTO chunks VALUES(1,'a.py',1,2,'definition','def foo(): return 1',?)", (vec,))
+    con.execute("INSERT INTO chunks_fts(rowid,text,path) VALUES(1,'def foo(): return 1','a.py')")
+    con.commit()
+    con.close()
+    store = Store(db)
+    assert not store.has_symbols
+    hit = store.search("foo", emb)[0]
+    assert hit.chunk.citation == "a.py:1-2" and hit.chunk.symbol is None
