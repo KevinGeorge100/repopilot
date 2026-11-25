@@ -87,12 +87,15 @@ class AnthropicLLM:
         cached_tools = [dict(t) for t in tools]
         if cached_tools:
             cached_tools[-1]["cache_control"] = {"type": "ephemeral"}
+        kwargs: dict[str, Any] = {}
+        if cached_tools:  # an empty tool list is how the agent forces a final answer; the API rejects an empty array
+            kwargs["tools"] = cached_tools
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            tools=cached_tools,
             messages=messages,
+            **kwargs,
         )
         blocks: list[TextBlock | ToolUse] = []
         for b in resp.content:
@@ -179,12 +182,13 @@ class OpenAICompatLLM:
         self.headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     def create(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
-        body = {
+        body: dict[str, Any] = {
             "model": self.model,
             "messages": to_openai_messages(system, messages),
-            "tools": to_openai_tools(tools),
             "max_tokens": self.max_tokens,
         }
+        if tools:  # no tools means "answer in text now"; some providers reject an empty array
+            body["tools"] = to_openai_tools(tools)
         for attempt in range(self.max_retries + 1):
             t0 = time.monotonic()
             try:

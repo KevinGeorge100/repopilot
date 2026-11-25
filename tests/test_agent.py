@@ -112,3 +112,105 @@ def test_verify_line_range_bounds(tmp_path: Path):
     assert verify("`a.py:1-9`", tmp_path, seen).invalid
     assert verify("`a.py:0-1`", tmp_path, seen).invalid
     assert verify("`../a.py:1-1`", tmp_path, seen).cited == []
+
+
+# ---- loop robustness, found by the evaluation ---------------------------------
+def test_repeated_search_returns_a_hint_instead_of_another_result(env):
+    agent, llm = make(env, [tool("search_code", query="parse args"), tool("search_code", query="Parse, ARGS!"), say("`cli.py:1-3`")])
+    r = agent.run("q")
+    dup = llm.calls[2]["messages"][-1]["content"][0]
+    assert dup["is_error"] and "already ran this exact search" in dup["content"] and len(dup["content"]) < 400
+    assert [e.data.get("duplicate") for e in r.events if e.kind == "tool_call"] == [None, True]
+
+
+def test_different_searches_and_reads_are_not_duplicates(env):
+    read = {"path": "cli.py", "start_line": 1, "end_line": 3}
+    agent, _ = make(env, [tool("search_code", query="parse"), tool("search_code", query="main"), tool("read_file", **read),
+                          tool("read_file", **read), say("`cli.py:1-3`")])
+    r = agent.run("q")
+    assert [e.data.get("duplicate") for e in r.events if e.kind == "tool_call"] == [None, None, None, True]
+
+
+def test_last_step_removes_tools_and_asks_for_a_final_answer(env):
+    agent, llm = make(env, [tool("search_code", query="parse args"), say("Args are parsed in `cli.py:1-3`.")], max_steps=2)
+    r = agent.run("q")
+    assert llm.calls[0]["tools"] and llm.calls[1]["tools"] == []
+    nudge = llm.calls[1]["messages"][-1]["content"]
+    assert any("out of steps" in b.get("text", "") for b in nudge if b["type"] == "text")
+    assert r.stopped == "done" and r.citations.ok and r.answer
+
+
+def test_a_single_step_agent_keeps_its_tools(env):
+    agent, llm = make(env, [say("`cli.py:1-3`")], max_steps=1)
+    agent.run("q")
+    assert llm.calls[0]["tools"]
+
+
+def test_final_nudge_also_works_after_a_repair_turn(env):
+    agent, llm = make(env, [tool("search_code", query="parse"), say("no cites"), say("`cli.py:1-3`")], max_steps=3)
+    r = agent.run("q")
+    assert llm.calls[2]["tools"] == [] and "out of steps" in llm.calls[2]["messages"][-1]["content"]
+    assert r.citations.ok
+
+
+# ---- honest "not in this repo" answers ----------------------------------------
+def test_an_honest_not_found_answer_is_accepted_without_a_repair_turn(env):
+    agent, llm = make(env, [tool("search_code", query="yaml"), say("The repository does not contain any YAML configuration support.")])
+    r = agent.run("Does it support YAML?")
+    assert len(llm.calls) == 2 and r.stopped == "done" and not any(e.kind == "repair" for e in r.events)
+    assert r.citations.abstained and r.citations.ok and r.to_dict()["citations"]["abstained"] is True
+
+
+def test_absence_is_not_accepted_without_looking_or_when_it_hides_a_claim(env):
+    # never searched: a bare "does not" is not an answer
+    agent, llm = make(env, [say("It does not support that."), say("It does not support that either.")])
+    r = agent.run("q")
+    assert any(e.kind == "repair" for e in r.events) and not r.citations.abstained
+    assert "cite nothing" in llm.calls[1]["messages"][-1]["content"]  # the repair message offers the honest way out
+    # a leading "Yes" is a claim about the code and needs evidence
+    agent, _ = make(env, [tool("search_code", query="x"), say("Yes, via custom classes, though it does not ship one."), say("Yes, `cli.py:1-3` shows it.")])
+    assert any(e.kind == "repair" for e in agent.run("q").events)
+    # an invalid citation is never an abstention
+    agent, _ = make(env, [tool("search_code", query="x"), say("It does not exist (see `ghost.py:1-2`)."), say("It does not exist.")])
+    assert any(e.kind == "repair" for e in agent.run("q").events)
+
+
+@pytest.mark.parametrize("text", ["The repository does not contain X.", "No, click doesn't support YAML.", "There is no built-in cache.", "It cannot do that."])
+def test_looks_like_absence_positive(text):
+    from repopilot.citations import looks_like_absence
+
+    assert looks_like_absence(text)
+
+
+@pytest.mark.parametrize("text", ["Yes, it supports it.", "It parses arguments in cli.py.", "", "Yes. It does not matter which."])
+def test_looks_like_absence_negative(text):
+    from repopilot.citations import looks_like_absence
+
+    assert not looks_like_absence(text)
+
+
+def test_comma_lists_of_ranges_are_parsed_and_each_is_verified(tmp_path: Path):
+    (tmp_path / "a.py").write_text("\n".join(f"line {i}" for i in range(1, 41)) + "\n")
+    text = "Defaults at `a.py:3`, the check at `a.py:10-12,30`, and a list a.py:5, 7-8."
+    cites = extract(text)
+    assert [(c.start, c.end) for c in cites] == [(3, 3), (10, 12), (30, 30), (5, 5), (7, 8)]
+    seen = [Citation("a.py", 1, 40)]
+    assert verify("see `a.py:10-12,30`", tmp_path, seen).ok
+    rep = verify("see `a.py:10,99`", tmp_path, seen)  # one good range, one outside the file
+    assert len(rep.cited) == 1 and rep.invalid and not rep.ok
+    assert extract("prose like version 1.2:3 or http://x.com:8080/a stays untouched") == []
+
+
+def test_a_model_that_ignores_no_tools_on_the_last_step_is_asked_again_for_plain_text(env):
+    # step 2 is the forced final step: the model still asks for a tool. Its call is dropped, not executed.
+    agent, llm = make(
+        env,
+        [tool("search_code", query="parse args"), tool("read_file", path="cli.py"), say("Args are parsed in `cli.py:1-3`.")],
+        max_steps=2,
+    )
+    r = agent.run("q")
+    assert r.stopped == "done" and r.answer and r.citations.ok
+    assert llm.calls[2]["tools"] == []
+    assert "Do not call any tool" in llm.calls[2]["messages"][-1]["content"]
+    assert [e.name if hasattr(e, "name") else e.data.get("name") for e in r.events if e.kind == "tool_call"] == ["search_code"]  # the dropped call never ran
+    assert r.usage.input_tokens == 300  # all three model calls are accounted for

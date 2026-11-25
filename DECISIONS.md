@@ -33,6 +33,8 @@
 | 24 | Evaluation is deterministic (fact regexes, gold evidence overlap, citation checks), no LLM judge, on repos pinned to exact SHAs with a self-verifying ground truth (`eval verify`). 6 of 38 questions are negative ("not in this repo") | Reproducible, free to re-score, and negatives catch fabrication. The cost is brittleness: regexes can miss a correct answer in other words | A second author or real user questions are available |
 | 25 | Auditing the first baseline's 9 failures found 4 were my scoring or ground-truth mistakes. Fixed in dataset v2 and the stored answers re-scored with `eval rescore`, not re-run. The fixes are listed in the dataset's `history` | Reporting 76% when the true figure was 84% would have undersold the system and hidden how brittle regex scoring is | n/a |
 
+| 26 | Agent loop: a repeated tool call returns a hint (searches compare by words); the last step removes tools, and if the model still calls one that turn is dropped and plain text is requested; an answer that opens by saying the thing is absent is accepted without citations once the agent has searched (never after a leading "Yes", with an invalid citation, or without searching); `path:12,40-45` lists are parsed | Evaluation showed empty answers after 8 repeated searches, and our citation check pushing the model to cite lines it never read | Abstention heuristics cause false accepts |
+
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
 - `gemini-3.8-flash` hung (read timeout) in testing; `gemini-3.1-flash-lite` answered in <1s. Re-test other models in the Day 6 evals.
