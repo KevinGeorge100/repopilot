@@ -5,7 +5,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-CITE_RE = re.compile(r"(?<![\w/:.])([\w][\w./\-]*\.[A-Za-z]\w*):(\d+)(?:-(\d+))?(?!\d)")
+# `path:12`, `path:12-20`, and lists such as `path:12,40-45` (models write them; each range is verified separately)
+CITE_RE = re.compile(r"(?<![\w/:.])([\w][\w./\-]*\.[A-Za-z]\w*):(\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*)(?!\d)")
 
 
 @dataclass(frozen=True)
@@ -23,10 +24,11 @@ class CitationReport:
     cited: list[Citation] = field(default_factory=list)
     invalid: list[tuple[str, str]] = field(default_factory=list)  # (citation, reason)
     ungrounded: list[str] = field(default_factory=list)  # real lines the agent never retrieved
+    abstained: bool = False  # an honest "not in this repo" answer: nothing to cite, and that is fine
 
     @property
     def ok(self) -> bool:
-        return bool(self.cited) and not self.invalid and not self.ungrounded
+        return (bool(self.cited) or self.abstained) and not self.invalid and not self.ungrounded
 
     @property
     def validity(self) -> float:
@@ -34,12 +36,26 @@ class CitationReport:
         return 1.0 if total == 0 else len(self.cited) / total
 
 
+# An answer that opens by saying the thing is absent. A leading "Yes" never counts: "Yes, via a custom class"
+# is a claim about the code and needs evidence like any other.
+ABSENCE_RE = re.compile(
+    r"^(?!\s*yes\b)[\s\S]{0,300}?\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|"
+    r"no (built-in|support|mention|evidence|such|integration)|"
+    r"not (found|mentioned|provide|support|supported|include|contain|part|implemented|present|available))\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_absence(answer: str) -> bool:
+    return bool(ABSENCE_RE.search(answer))
+
+
 def extract(text: str) -> list[Citation]:
     out: list[Citation] = []
     for m in CITE_RE.finditer(text):
-        start = int(m.group(2))
-        end = int(m.group(3) or start)
-        out.append(Citation(m.group(1), start, end))
+        for part in m.group(2).split(","):
+            lo, _, hi = part.strip().partition("-")
+            out.append(Citation(m.group(1), int(lo), int(hi or lo)))
     return list(dict.fromkeys(out))
 
 

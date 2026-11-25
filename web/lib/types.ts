@@ -22,6 +22,7 @@ export type AnswerPayload = {
     ungrounded: string[];
     validity: number;
     ok: boolean;
+    abstained?: boolean;
   };
 };
 

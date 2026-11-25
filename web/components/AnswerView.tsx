@@ -69,7 +69,9 @@ function Verification({ payload }: { payload: AnswerPayload }) {
   const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
   return (
     <div className="mt-4 flex flex-col gap-1.5 text-sm text-graphite" role="status">
-      {total === 0 ? (
+      {total === 0 && c.abstained ? (
+        <p>The agent searched and found nothing matching in this repo, so there is no code to cite.</p>
+      ) : total === 0 ? (
         <p className="text-alert">This answer cites no code, so treat it with caution.</p>
       ) : problems === 0 ? (
         <p className="flex items-center gap-2">

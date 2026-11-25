@@ -138,3 +138,15 @@ def test_network_errors_retry_then_become_runtime_error():
 
     with pytest.raises(RuntimeError, match="unreachable"):
         llm_with(boom, max_retries=1).create("s", [], [])
+
+
+def test_empty_tool_list_omits_tools_from_the_request():
+    seen = []
+
+    def handler(req):
+        seen.append(json.loads(req.content))
+        return reply("done")
+
+    llm_with(handler).create("s", [{"role": "user", "content": "q"}], [])
+    llm_with(handler).create("s", [{"role": "user", "content": "q"}], TOOL_SCHEMAS)
+    assert "tools" not in seen[0] and "tools" in seen[1]
