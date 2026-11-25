@@ -49,14 +49,22 @@ MAX_TOOL_RESULT_CHARS = 12_000
 class ToolRunner:
     """Executes the three read-only tools. Output is framed as untrusted repository data."""
 
-    def __init__(self, store: Store, embedder: Embedder, root: Path) -> None:
+    def __init__(
+        self,
+        store: Store,
+        embedder: Embedder,
+        root: Path,
+        default_k: int = 8,
+        max_chars: int = MAX_TOOL_RESULT_CHARS,
+    ) -> None:
         self.store, self.embedder, self.root = store, embedder, root
+        self.default_k, self.max_chars = default_k, max_chars
 
     def run(self, tu: ToolUse, seen: list[Citation]) -> tuple[str, bool]:
         """Return (text for the model, is_error). Retrieved line ranges are appended to `seen`."""
         try:
             if tu.name == "search_code":
-                res = search_code(self.store, self.embedder, str(tu.input.get("query", "")), int(tu.input.get("k", 8)))
+                res = search_code(self.store, self.embedder, str(tu.input.get("query", "")), int(tu.input.get("k", self.default_k)))
                 for h in res:
                     seen.extend(extract(h["citation"]))
             elif tu.name == "read_file":
@@ -71,6 +79,6 @@ class ToolRunner:
         except (ToolError, ValueError, TypeError) as e:
             return f"error: {e}", True
         text = json.dumps(res, ensure_ascii=False)
-        if len(text) > MAX_TOOL_RESULT_CHARS:
-            text = text[:MAX_TOOL_RESULT_CHARS] + '..."[truncated]"'
+        if len(text) > self.max_chars:
+            text = text[: self.max_chars] + '..."[truncated]"'
         return f"<repository_data>\n{text}\n</repository_data>", False

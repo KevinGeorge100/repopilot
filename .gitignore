@@ -6,3 +6,5 @@ node_modules/
 .next/
 .env
 .claude/
+.repopilot-eval/
+evals/results/

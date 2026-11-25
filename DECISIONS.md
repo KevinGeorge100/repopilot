@@ -30,6 +30,9 @@
 | 22 | Expected failures are converted to MCP `ToolError` by a decorator | In MCP 2.x any other exception is a crash: the model sees only "Error executing tool" and the server logs a traceback | SDK changes this default |
 | 23 | Owner/repo patterns reject dot-only names (`..`) and owners with dots, in the URL validator, PR URL parser and repo-id check | A test showed `../etc` resolved to a valid repo id. Not exploitable (the id is one directory name) but sloppy | n/a |
 
+| 24 | Evaluation is deterministic (fact regexes, gold evidence overlap, citation checks), no LLM judge, on repos pinned to exact SHAs with a self-verifying ground truth (`eval verify`). 6 of 38 questions are negative ("not in this repo") | Reproducible, free to re-score, and negatives catch fabrication. The cost is brittleness: regexes can miss a correct answer in other words | A second author or real user questions are available |
+| 25 | Auditing the first baseline's 9 failures found 4 were my scoring or ground-truth mistakes. Fixed in dataset v2 and the stored answers re-scored with `eval rescore`, not re-run. The fixes are listed in the dataset's `history` | Reporting 76% when the true figure was 84% would have undersold the system and hidden how brittle regex scoring is | n/a |
+
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
 - `gemini-3.8-flash` hung (read timeout) in testing; `gemini-3.1-flash-lite` answered in <1s. Re-test other models in the Day 6 evals.

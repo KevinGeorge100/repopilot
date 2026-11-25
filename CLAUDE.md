@@ -13,7 +13,7 @@ Cited code intelligence for GitHub repos: ingest -> index -> agent Q&A with file
 - `diff.py`, `review.py`  unified-diff parser with new-side line numbers; PR reviewer whose findings must anchor to added lines
 - `indexing.py`  IndexManager: background index jobs shared by the API and MCP
 - `mcp_server.py`  MCP server (official SDK v2 `MCPServer`), run with `repopilot mcp`; raise `ValueError`/`RuntimeError` for expected failures, they become MCP ToolErrors
-- (Day 6) `evals/` harness; `make eval`
+- `evals/` (data, README) and `src/repopilot/evals/`  dataset + verify, deterministic scoring, resumable runner, reports. Run `repopilot eval verify` after touching `evals/data/questions.json`; never loosen a scoring regex to fit a model's output (see DECISIONS #25)
 
 ## Conventions
 - Python 3.13, managed with uv. Run: `uv run pytest`, `uv run ruff check .`
