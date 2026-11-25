@@ -238,6 +238,60 @@ def eval_run(
     typer.echo(f"\n{passed}/{len(traces)} passed. Traces in {run_dir}. Next: repopilot eval report {run_dir}")
 
 
+@eval_app.command("retrieval")
+def eval_retrieval(
+    dataset: Path = EVAL_DATASET,
+    workdir: Path = EVAL_WORKDIR,
+    symbols: bool = True,
+    embed_chars: int | None = None,
+    queries_from: Path | None = None,
+) -> None:
+    """Measure where the gold evidence ranks in search results. No model calls.
+
+    --queries-from RUN_DIR replays the searches that run's agent actually issued instead of the question text.
+
+    --no-symbols turns name matching off on the same index. --embed-chars N builds a separate index that embeds
+    only the first N characters of each chunk (stored beside the main one) to compare accuracy against speed.
+    """
+    import time
+
+    from .evals.retrieval import evaluate_retrieval, summarize
+    from .evals.runner import RepoHandle, prepare_repos
+    from .pipeline import build_index
+
+    ds = _load_eval_dataset(dataset)
+    embedder = FastEmbedder()
+    handles, _ = prepare_repos(ds, workdir, embedder, typer.echo)
+    if embed_chars is not None:
+        alt: dict[str, RepoHandle] = {}
+        for name, h in handles.items():
+            db = workdir / "index" / f"{name}.e{embed_chars}.db"
+            t0 = time.monotonic()
+            if not db.exists():
+                build_index(h.root, db, embedder, embed_chars=embed_chars)
+                typer.echo(f"  {name}: built {embed_chars}-char index in {time.monotonic() - t0:.0f}s")
+            alt[name] = RepoHandle(h.root, db)
+        handles = alt
+    if queries_from:
+        from .evals.retrieval import evaluate_queries
+        from .evals.runner import read_traces
+
+        past = read_traces(queries_from / "traces.jsonl")
+        s = summarize(evaluate_queries(ds, handles, embedder, past, symbols))
+        source = f", replaying the queries of {queries_from.name}"
+    else:
+        s = summarize(evaluate_retrieval(ds, handles, embedder, symbols))
+        source = ", question text as the query"
+    pct = lambda x: "n/a" if x is None else f"{x * 100:.0f}%"
+    label = f"symbols {'on' if symbols else 'off'}, embed {embed_chars or 'default'} chars{source}"
+    typer.echo(
+        f"retrieval ({label}): {s['n']} positive questions | hit@1 {pct(s['hit@1'])}  hit@3 {pct(s['hit@3'])}  "
+        f"hit@8 {pct(s['hit@8'])}  hit@20 {pct(s['hit@20'])}  MRR {s['mrr']:.3f}"
+    )
+    if s["missed"]:
+        typer.echo(f"  not in the top 20: {', '.join(s['missed'])}")
+
+
 @eval_app.command("rescore")
 def eval_rescore(run_dir: Path, dataset: Path = EVAL_DATASET) -> None:
     """Re-grade a finished run against the current dataset (no model calls). The original traces are kept."""

@@ -432,7 +432,7 @@ def test_rescore_regrades_stored_answers_without_model_calls(tmp_path: Path):
 
 
 # ---- repo preparation ----------------------------------------------------------
-def test_prepare_repos_builds_then_reuses_an_index_for_the_same_commit(tmp_path: Path):
+def test_prepare_repos_builds_reuses_and_rebuilds_on_a_new_index_version(tmp_path: Path):
     from repopilot.evals.runner import prepare_repos
 
     ds = parse_dataset(raw())
@@ -445,13 +445,20 @@ def test_prepare_repos_builds_then_reuses_an_index_for_the_same_commit(tmp_path:
 
     logs: list[str] = []
     handles, stats = prepare_repos(ds, work, HashEmbedder(), logs.append, run=fake_run)
-    assert stats["demo"]["chunks"] >= 2 and handles["demo"].db.exists()
+    assert stats["demo"]["chunks"] >= 2 and stats["demo"]["index_version"] >= 2 and handles["demo"].db.exists()
     assert any("indexing" in m for m in logs)
 
     logs.clear()
     prepare_repos(ds, work, HashEmbedder(), logs.append, run=fake_run)
     assert any("reusing index" in m for m in logs)  # same sha, same index version: no re-embedding
 
+    marker = work / "index" / "demo.json"
+    info = json.loads(marker.read_text())
+    info["index_version"] = 1  # an index built by older code must not be trusted
+    marker.write_text(json.dumps(info))
+    logs.clear()
+    prepare_repos(ds, work, HashEmbedder(), logs.append, run=fake_run)
+    assert any("indexing" in m for m in logs)
 
 
 def test_repeated_and_unfinished_runs_are_measured_from_the_events():
@@ -480,3 +487,36 @@ def test_comparison_leaves_out_questions_a_provider_error_prevented(tmp_path: Pa
     assert "Passed among the 2 answered questions | 2/2 = 100%" in out
     assert "Fixed: b. Regressed: none." in out  # c is excluded, not counted as a regression
     assert "| Questions passed | 50% | 100% |" in out  # 1/2 before, 2/2 after, on the same two questions
+
+
+# ---- retrieval evaluation (no model) -------------------------------------------
+def test_retrieval_eval_ranks_gold_evidence_and_reports_misses(world):
+    from repopilot.evals.retrieval import evaluate_retrieval, summarize
+
+    ds, handles, emb, _ = world
+    res = evaluate_retrieval(ds, handles, emb)
+    assert [(r.id, r.rank) for r in res] == [("d-01", 1)]  # the negative question has no gold, so it is skipped
+    s = summarize(res)
+    assert (s["n"], s["hit@1"], s["hit@8"], s["mrr"], s["missed"]) == (1, 1.0, 1.0, 1.0, [])
+    assert evaluate_retrieval(ds, handles, emb, symbols=False)[0].rank is not None  # the ablation switch works
+
+    elsewhere = raw()
+    elsewhere["questions"][0]["gold"] = [{"path": "nowhere.py", "start": 1, "end": 2, "anchor": "x"}]
+    miss = evaluate_retrieval(parse_dataset(elsewhere), handles, emb)
+    assert miss[0].rank is None and summarize(miss)["missed"] == ["d-01"] and summarize(miss)["mrr"] == 0.0
+    assert summarize([])["hit@1"] is None
+
+
+def test_query_replay_scores_the_best_of_the_queries_a_run_issued(world):
+    from repopilot.evals.retrieval import evaluate_queries
+
+    ds, handles, emb, _ = world
+    ev = lambda q: {"kind": "tool_call", "name": "search_code", "input": {"query": q}}
+    traces = [
+        {"id": "d-01", "events": [ev("zzz qqq nothing"), ev("hello"), ev("hello")]},  # one query finds it; repeats counted once
+        {"id": "d-02", "events": [ev("yaml")]},  # negative question: skipped
+        {"id": "nope", "events": [ev("hello")]},  # not in the dataset: skipped
+    ]
+    res = evaluate_queries(ds, handles, emb, traces)
+    assert [(r.id, r.rank) for r in res] == [("d-01", 1)]
+    assert evaluate_queries(ds, handles, emb, [{"id": "d-01", "events": []}]) == []  # never searched: nothing to replay
