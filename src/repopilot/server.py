@@ -19,11 +19,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .agent import Agent, AgentResult
+from .diff import fetch_pr_diff, parse_diff, parse_pr_url
 from .embed import Embedder, FastEmbedder
 from .ingest import clone, validate_url
 from .llm import LLM, make_llm
 from .pipeline import build_index
+from .review import PRReviewer
 from .store import Store
+from .toolbox import ToolRunner
 from .tools import ToolError, _resolve
 
 REPO_ID = re.compile(r"^[\w.-]+--[\w.-]+$")
@@ -63,6 +66,10 @@ class IndexRequest(BaseModel):
     url: str = Field(max_length=200)
 
 
+class ReviewRequest(BaseModel):
+    url: str = Field(max_length=200)
+
+
 class AskRequest(BaseModel):
     repo: str = Field(max_length=200)
     question: str = Field(min_length=3, max_length=1000)
@@ -99,6 +106,7 @@ def create_app(
     llm_factory: Callable[[], LLM] = make_llm,
     embedder: Embedder | None = None,
     clone_fn: Callable[[str, Path], Path] = clone,
+    diff_fn: Callable[[str, str, int], str] = fetch_pr_diff,
     ask_limit: int = 12,
     index_limit: int = 4,
 ) -> FastAPI:
@@ -207,6 +215,45 @@ def create_app(
                     else:
                         yield sse(ev.kind, ev.data)
             except RuntimeError as e:  # provider/network failures
+                yield sse("error", {"message": str(e)[:300]})
+
+        return StreamingResponse(
+            events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        )
+
+    @app.post("/api/review")
+    def review(body: ReviewRequest, req: Request) -> StreamingResponse:
+        try:
+            owner, name, number = parse_pr_url(body.url)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        rid = f"{owner}--{name}"
+        if not limiter.allow(f"ask:{client_ip(req)}", ask_limit, 60):
+            raise HTTPException(429, "too many requests; slow down")
+        try:
+            llm = llm_factory()
+        except RuntimeError as e:
+            raise HTTPException(503, f"LLM not configured: {e}") from e
+        try:
+            pd = parse_diff(diff_fn(owner, name, number))
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(502, str(e)) from e
+        if not pd.files:
+            raise HTTPException(422, "This pull request has no reviewable changes.")
+        # Repo context is optional: if the repo is already indexed, the reviewer can look things up.
+        tools = ToolRunner(Store(db_path(rid)), embedder, repo_dir(rid)) if db_path(rid).exists() else None
+        reviewer = PRReviewer(llm, pd, tools)
+
+        def events() -> Iterator[str]:
+            try:
+                for ev in reviewer.stream(f"{owner}/{name}#{number}"):
+                    if ev.kind == "review":
+                        yield sse("review", {**ev.data["result"].to_dict(), "context": tools is not None})
+                    else:
+                        yield sse(ev.kind, ev.data)
+            except RuntimeError as e:
                 yield sse("error", {"message": str(e)[:300]})
 
         return StreamingResponse(
