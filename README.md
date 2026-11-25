@@ -23,13 +23,22 @@ cd web && npm install && npm run dev   # UI on :3000
 ```
 CLI: `uv run repopilot index <github-url>` then `uv run repopilot ask <owner--repo> "question"`.
 
+### Review a pull request
+```bash
+uv run repopilot review https://github.com/owner/repo/pull/123
+```
+Public PRs only. The reviewer reads the diff and reports structured findings (bug, security, risk, nit). Every
+finding must point at a line the PR actually added; anything that doesn't is rejected, not shown. If the repo is
+already indexed, the reviewer can also search the default branch for callers and definitions. Set `GITHUB_TOKEN`
+to raise GitHub's unauthenticated rate limit (60 requests/hour per IP). API: `POST /api/review {"url": ...}` (SSE).
+
 ## Safety
 Public GitHub URLs only, shallow clones, read-only tools, repo text treated as untrusted data, per-IP rate
 limits, step and token budgets, chunk cap per repo. Code snippets are sent to the LLM provider: do not index
 private code.
 
 ## Status
-See `ROADMAP.md`. Tests: `uv run pytest` (49), `cd web && npm run lint && npm run build`.
+See `ROADMAP.md`. Tests: `uv run pytest` (83), `cd web && npm run lint && npm run build`.
 
 ## License
 MIT. See `LICENSE`.
