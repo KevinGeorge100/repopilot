@@ -132,6 +132,14 @@ def review(url: str, provider: str | None = None, model: str | None = None, work
 
 
 @app.command()
+def mcp(workdir: Path = WORKDIR) -> None:
+    """Run the MCP server over stdio (for Claude Code, Claude Desktop and other MCP clients)."""
+    from .mcp_server import build_server
+
+    build_server(workdir).run("stdio")
+
+
+@app.command()
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the API server (SSE streaming)."""
     import logging
