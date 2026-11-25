@@ -63,20 +63,7 @@ def sse(event: str, data: dict) -> str:
 
 
 def result_to_dict(r: AgentResult) -> dict:
-    c = r.citations
-    return {
-        "answer": r.answer,
-        "stopped": r.stopped,
-        "steps": r.steps,
-        "usage": asdict(r.usage),
-        "citations": {
-            "valid": [{"path": x.path, "start": x.start, "end": x.end} for x in c.cited],
-            "invalid": [{"citation": a, "reason": b} for a, b in c.invalid],
-            "ungrounded": c.ungrounded,
-            "validity": c.validity,
-            "ok": c.ok,
-        },
-    }
+    return r.to_dict()
 
 
 def create_app(
