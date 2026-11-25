@@ -1,0 +1,811 @@
+{
+ "version": 2,
+ "description": "RepoPilot evaluation set. Ground truth was written by reading the code at the pinned commits; `verify` re-checks every gold range and anchor.",
+ "repos": {
+  "itsdangerous": {
+   "url": "https://github.com/pallets/itsdangerous",
+   "sha": "672971d66a2ef9f85151e53283113f33d642dabd"
+  },
+  "click": {
+   "url": "https://github.com/pallets/click",
+   "sha": "08b803cf32ceb2ae6a772c62d5da42757a897d44"
+  },
+  "slugify": {
+   "url": "https://github.com/sindresorhus/slugify",
+   "sha": "99b35c2b0d6ccfad2b96ba9ce6997c6365b9a4b7"
+  }
+ },
+ "questions": [
+  {
+   "id": "its-01",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "Which hash algorithm does itsdangerous' Signer use by default when it signs a value?",
+   "facts": [
+    "sha-?1"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 40,
+     "end": 45,
+     "anchor": "sha1"
+    },
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 51,
+     "end": 54,
+     "anchor": "SHA1"
+    },
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 120,
+     "end": 120,
+     "anchor": "default_digest_method"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-02",
+   "repo": "itsdangerous",
+   "category": "reasoning",
+   "question": "Why does signer.py define a _lazy_sha1 function instead of passing hashlib.sha1 directly as the default digest method?",
+   "facts": [
+    "fips"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 40,
+     "end": 45,
+     "anchor": "FIPS"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-03",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "What does Signer.unsign raise when the signed value does not contain the separator, and what does it raise when the signature is wrong?",
+   "facts": [
+    "BadSignature",
+    "(not found|no .{0,15} found|missing|absent|does not (contain|include)|without)"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 244,
+     "end": 256,
+     "anchor": "No {self.sep!r} found"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-04",
+   "repo": "itsdangerous",
+   "category": "multi-hop",
+   "question": "How does itsdangerous support rotating secret keys: which key signs new values, and which keys are tried when verifying?",
+   "facts": [
+    "newest|last",
+    "older|oldest|previous|other keys|all (the )?(keys|secret)|each (secret )?key"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 138,
+     "end": 143,
+     "anchor": "newest (last) key is used for signing"
+    },
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 236,
+     "end": 240,
+     "anchor": "reversed(self.secret_keys)"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-05",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "Which separator characters does Signer reject, and why?",
+   "facts": [
+    "letters?|digits?|alphabet",
+    "signature"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 146,
+     "end": 151,
+     "anchor": "cannot be used"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-06",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "Which key derivation methods does Signer support, which one is the default, and what happens with an unknown method?",
+   "facts": [
+    "django-concat",
+    "hmac",
+    "TypeError",
+    "none"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 200,
+     "end": 213,
+     "anchor": "Unknown key derivation method"
+    },
+    {
+     "path": "src/itsdangerous/signer.py",
+     "start": 127,
+     "end": 127,
+     "anchor": "django-concat"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-07",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "What does TimestampSigner.sign add to the value before it computes the signature?",
+   "facts": [
+    "timestamp",
+    "base64"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/timed.py",
+     "start": 45,
+     "end": 51,
+     "anchor": "int_to_bytes(self.get_timestamp())"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-08",
+   "repo": "itsdangerous",
+   "category": "reasoning",
+   "question": "Under what conditions does TimestampSigner.unsign raise SignatureExpired?",
+   "facts": [
+    "max_age",
+    "(negative|future|< ?0|less than (0|zero))"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/timed.py",
+     "start": 137,
+     "end": 153,
+     "anchor": "SignatureExpired("
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-09",
+   "repo": "itsdangerous",
+   "category": "multi-hop",
+   "question": "How does URLSafeSerializer decide whether to compress the payload, and how does it mark a compressed payload?",
+   "facts": [
+    "zlib",
+    "(shorter|smaller|less)",
+    "(dot|period|prefix|leading|starts? with)"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/url_safe.py",
+     "start": 55,
+     "end": 69,
+     "anchor": "zlib.compress"
+    },
+    {
+     "path": "src/itsdangerous/url_safe.py",
+     "start": 30,
+     "end": 34,
+     "anchor": "startswith(b\".\")"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-10",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "How does base64_encode make its output safe to use in URLs, and what does it do with padding?",
+   "facts": [
+    "url-?safe",
+    "padding|rstrip|strip"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/encoding.py",
+     "start": 20,
+     "end": 25,
+     "anchor": "rstrip"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-11",
+   "repo": "itsdangerous",
+   "category": "fact",
+   "question": "What is the date_signed attribute on BadTimeSignature, and when is it populated?",
+   "facts": [
+    "date_signed",
+    "(signed|created|signature was)"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/exc.py",
+     "start": 41,
+     "end": 57,
+     "anchor": "date_signed"
+    },
+    {
+     "path": "src/itsdangerous/timed.py",
+     "start": 117,
+     "end": 130,
+     "anchor": "date_signed"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-12",
+   "repo": "itsdangerous",
+   "category": "multi-hop",
+   "question": "When Serializer.loads cannot verify with the configured signer, what else does it try before giving up, and which exception does the caller see?",
+   "facts": [
+    "fallback",
+    "BadSignature"
+   ],
+   "gold": [
+    {
+     "path": "src/itsdangerous/serializer.py",
+     "start": 287,
+     "end": 307,
+     "anchor": "for fallback in self.fallback_signers"
+    },
+    {
+     "path": "src/itsdangerous/serializer.py",
+     "start": 337,
+     "end": 343,
+     "anchor": "last_exception"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "its-13",
+   "repo": "itsdangerous",
+   "category": "negative",
+   "question": "Does itsdangerous ship built-in support for signing with RSA or ECDSA keys?",
+   "facts": [
+    "^(?!\\s*yes\\b)[\\s\\S]{0,300}?\\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|never|without|no (built-in|support|mention|integration|direct|such|cli|command|cache|caching|native|asyncio|async|django|yaml)|not (found|mention|provide|support|supported|include|contain|built|part|integrate|available|implemented))\\b"
+   ],
+   "gold": [],
+   "negative": true
+  },
+  {
+   "id": "its-14",
+   "repo": "itsdangerous",
+   "category": "negative",
+   "question": "How does itsdangerous integrate with Django's session framework?",
+   "facts": [
+    "^(?!\\s*yes\\b)[\\s\\S]{0,300}?\\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|never|without|no (built-in|support|mention|integration|direct|such|cli|command|cache|caching|native|asyncio|async|django|yaml)|not (found|mention|provide|support|supported|include|contain|built|part|integrate|available|implemented))\\b"
+   ],
+   "gold": [],
+   "negative": true
+  },
+  {
+   "id": "clk-01",
+   "repo": "click",
+   "category": "reasoning",
+   "question": "How does click implement the built-in --help option, and how does it keep a user parameter named 'help' from clashing with it?",
+   "facts": [
+    "_click_default_help",
+    "get_help_option"
+   ],
+   "gold": [
+    {
+     "path": "src/click/core.py",
+     "start": 1216,
+     "end": 1250,
+     "anchor": "_HELP_OPTION_STORAGE_NAME"
+    },
+    {
+     "path": "src/click/core.py",
+     "start": 59,
+     "end": 59,
+     "anchor": "_click_default_help"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-02",
+   "repo": "click",
+   "category": "fact",
+   "question": "What does Group.resolve_command do when the requested subcommand is not found?",
+   "facts": [
+    "NoSuchCommand",
+    "normaliz"
+   ],
+   "gold": [
+    {
+     "path": "src/click/core.py",
+     "start": 2111,
+     "end": 2135,
+     "anchor": "raise NoSuchCommand"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-03",
+   "repo": "click",
+   "category": "multi-hop",
+   "question": "How does CommandCollection look up and list commands from its sources?",
+   "facts": [
+    "source",
+    "sorted|alphabetical",
+    "first|own|this group"
+   ],
+   "gold": [
+    {
+     "path": "src/click/core.py",
+     "start": 2196,
+     "end": 2219,
+     "anchor": "for source in self.sources"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-04",
+   "repo": "click",
+   "category": "multi-hop",
+   "question": "How is the automatic environment variable prefix for a subcommand's context derived from its parent?",
+   "facts": [
+    "parent",
+    "upper",
+    "underscore|replac"
+   ],
+   "gold": [
+    {
+     "path": "src/click/core.py",
+     "start": 501,
+     "end": 519,
+     "anchor": "auto_envvar_prefix = ("
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-05",
+   "repo": "click",
+   "category": "fact",
+   "question": "What happens when a click Group is invoked without any subcommand?",
+   "facts": [
+    "invoke_without_command",
+    "Missing command"
+   ],
+   "gold": [
+    {
+     "path": "src/click/core.py",
+     "start": 2049,
+     "end": 2057,
+     "anchor": "Missing command"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-06",
+   "repo": "click",
+   "category": "fact",
+   "question": "When does click.echo strip ANSI color codes from its output?",
+   "facts": [
+    "strip",
+    "tty|terminal|file|pipe|redirect"
+   ],
+   "gold": [
+    {
+     "path": "src/click/utils.py",
+     "start": 324,
+     "end": 327,
+     "anchor": "should_strip_ansi"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-07",
+   "repo": "click",
+   "category": "reasoning",
+   "question": "What does click.prompt do when hide_input is enabled and the user interrupts with Ctrl+C, and how does confirmation_prompt work?",
+   "facts": [
+    "Abort",
+    "(do not match|don'?t match|mismatch|match|repeat)"
+   ],
+   "gold": [
+    {
+     "path": "src/click/termui.py",
+     "start": 235,
+     "end": 245,
+     "anchor": "hide_input"
+    },
+    {
+     "path": "src/click/termui.py",
+     "start": 254,
+     "end": 258,
+     "anchor": "confirmation_prompt"
+    },
+    {
+     "path": "src/click/termui.py",
+     "start": 279,
+     "end": 286,
+     "anchor": "do not match"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-08",
+   "repo": "click",
+   "category": "fact",
+   "question": "How does click.confirm treat an empty answer, and when does it raise Abort?",
+   "facts": [
+    "default",
+    "Abort",
+    "EOF|KeyboardInterrupt|interrupt|abort"
+   ],
+   "gold": [
+    {
+     "path": "src/click/termui.py",
+     "start": 328,
+     "end": 345,
+     "anchor": "raise Abort()"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-09",
+   "repo": "click",
+   "category": "fact",
+   "question": "What exit codes do ClickException and UsageError use?",
+   "facts": [
+    "exit[ _]?codes?",
+    "\\b2\\b",
+    "\\b1\\b"
+   ],
+   "gold": [
+    {
+     "path": "src/click/exceptions.py",
+     "start": 35,
+     "end": 39,
+     "anchor": "exit_code: t.ClassVar[int] = 1"
+    },
+    {
+     "path": "src/click/exceptions.py",
+     "start": 68,
+     "end": 77,
+     "anchor": "exit_code: t.ClassVar[int] = 2"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-10",
+   "repo": "click",
+   "category": "fact",
+   "question": "How do you make click.Choice case-insensitive, and what is the default?",
+   "facts": [
+    "case_sensitive",
+    "false",
+    "true|default"
+   ],
+   "gold": [
+    {
+     "path": "src/click/types.py",
+     "start": 335,
+     "end": 336,
+     "anchor": "case_sensitive"
+    },
+    {
+     "path": "src/click/types.py",
+     "start": 355,
+     "end": 361,
+     "anchor": "case_sensitive: bool = True"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-11",
+   "repo": "click",
+   "category": "fact",
+   "question": "What does the clamp option of click.IntRange do?",
+   "facts": [
+    "clamp",
+    "boundary|bound|edge|limit|range",
+    "(instead of|rather than|not|without) (fail|error|rais)"
+   ],
+   "gold": [
+    {
+     "path": "src/click/types.py",
+     "start": 723,
+     "end": 724,
+     "anchor": "clamped"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-12",
+   "repo": "click",
+   "category": "fact",
+   "question": "What does CliRunner.invoke do with exceptions raised by the command, and what does the capture option control?",
+   "facts": [
+    "catch_exceptions",
+    "sys",
+    "fd"
+   ],
+   "gold": [
+    {
+     "path": "src/click/testing.py",
+     "start": 355,
+     "end": 364,
+     "anchor": "catch_exceptions"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-13",
+   "repo": "click",
+   "category": "multi-hop",
+   "question": "Which shells does click's built-in shell completion support?",
+   "facts": [
+    "bash",
+    "zsh",
+    "fish",
+    "powershell"
+   ],
+   "gold": [
+    {
+     "path": "src/click/shell_completion.py",
+     "start": 388,
+     "end": 391,
+     "anchor": "class BashComplete"
+    },
+    {
+     "path": "src/click/shell_completion.py",
+     "start": 447,
+     "end": 450,
+     "anchor": "class ZshComplete"
+    },
+    {
+     "path": "src/click/shell_completion.py",
+     "start": 479,
+     "end": 482,
+     "anchor": "class FishComplete"
+    },
+    {
+     "path": "src/click/shell_completion.py",
+     "start": 516,
+     "end": 519,
+     "anchor": "class PowerShellComplete"
+    },
+    {
+     "path": "src/click/shell_completion.py",
+     "start": 550,
+     "end": 555,
+     "anchor": "\"bash\": BashComplete"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "clk-14",
+   "repo": "click",
+   "category": "negative",
+   "question": "Does click have built-in support for loading option defaults from a YAML configuration file?",
+   "facts": [
+    "^(?!\\s*yes\\b)[\\s\\S]{0,300}?\\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|never|without|no (built-in|support|mention|integration|direct|such|cli|command|cache|caching|native|asyncio|async|django|yaml)|not (found|mention|provide|support|supported|include|contain|built|part|integrate|available|implemented))\\b"
+   ],
+   "gold": [],
+   "negative": true
+  },
+  {
+   "id": "clk-15",
+   "repo": "click",
+   "category": "negative",
+   "question": "How does click support async command functions with asyncio?",
+   "facts": [
+    "^(?!\\s*yes\\b)[\\s\\S]{0,300}?\\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|never|without|no (built-in|support|mention|integration|direct|such|cli|command|cache|caching|native|asyncio|async|django|yaml)|not (found|mention|provide|support|supported|include|contain|built|part|integrate|available|implemented))\\b"
+   ],
+   "gold": [],
+   "negative": true
+  },
+  {
+   "id": "slg-01",
+   "repo": "slugify",
+   "category": "fact",
+   "question": "What default options does slugify use when none are passed?",
+   "facts": [
+    "separator",
+    "lowercase",
+    "decamelize",
+    "transliterate"
+   ],
+   "gold": [
+    {
+     "path": "index.js",
+     "start": 81,
+     "end": 92,
+     "anchor": "separator: '-'"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-02",
+   "repo": "slugify",
+   "category": "fact",
+   "question": "What does slugify do if its first argument is not a string?",
+   "facts": [
+    "TypeError"
+   ],
+   "gold": [
+    {
+     "path": "index.js",
+     "start": 77,
+     "end": 79,
+     "anchor": "TypeError"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-03",
+   "repo": "slugify",
+   "category": "reasoning",
+   "question": "How does slugify treat apostrophes in contractions and possessives such as \"Conway's Law\"?",
+   "facts": [
+    "apostrophe",
+    "conways-law|conway.?s|dropp|remov"
+   ],
+   "gold": [
+    {
+     "path": "index.js",
+     "start": 136,
+     "end": 141,
+     "anchor": "contractionPattern"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-04",
+   "repo": "slugify",
+   "category": "multi-hop",
+   "question": "In what order does slugify apply custom replacements, decamelization and transliteration?",
+   "facts": [
+    "custom ?replacements?[\\s\\S]*decameliz[\\s\\S]*transliterat"
+   ],
+   "gold": [
+    {
+     "path": "index.js",
+     "start": 108,
+     "end": 127,
+     "anchor": "Apply custom replacements before decamelization"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-05",
+   "repo": "slugify",
+   "category": "reasoning",
+   "question": "What happens if the separator character is also listed in preserveCharacters?",
+   "facts": [
+    "Error|throw",
+    "separator"
+   ],
+   "gold": [
+    {
+     "path": "index.js",
+     "start": 61,
+     "end": 64,
+     "anchor": "cannot be included in preserved"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-06",
+   "repo": "slugify",
+   "category": "multi-hop",
+   "question": "How does slugifyWithCounter avoid returning the same slug twice, and how do you reset it?",
+   "facts": [
+    "counter|-2|suffix|number",
+    "reset"
+   ],
+   "gold": [
+    {
+     "path": "index.js",
+     "start": 161,
+     "end": 197,
+     "anchor": "countable.reset"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-07",
+   "repo": "slugify",
+   "category": "multi-hop",
+   "question": "Which replacements does slugify apply by default, and can they be overridden?",
+   "facts": [
+    "unicorn",
+    "love",
+    "overrid|custom"
+   ],
+   "gold": [
+    {
+     "path": "overridable-replacements.js",
+     "start": 1,
+     "end": 5,
+     "anchor": "unicorn"
+    },
+    {
+     "path": "index.js",
+     "start": 98,
+     "end": 102,
+     "anchor": "builtinOverridableReplacements"
+    }
+   ],
+   "negative": false
+  },
+  {
+   "id": "slg-08",
+   "repo": "slugify",
+   "category": "negative",
+   "question": "Does slugify provide a command-line interface?",
+   "facts": [
+    "^(?!\\s*yes\\b)[\\s\\S]{0,300}?\\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|never|without|no (built-in|support|mention|integration|direct|such|cli|command|cache|caching|native|asyncio|async|django|yaml)|not (found|mention|provide|support|supported|include|contain|built|part|integrate|available|implemented))\\b"
+   ],
+   "gold": [],
+   "negative": true
+  },
+  {
+   "id": "slg-09",
+   "repo": "slugify",
+   "category": "negative",
+   "question": "How does slugify cache or memoize its results?",
+   "facts": [
+    "^(?!\\s*yes\\b)[\\s\\S]{0,300}?\\b(does not|doesn'?t|do not|don'?t|is not|isn'?t|are not|aren'?t|cannot|can'?t|never|without|no (built-in|support|mention|integration|direct|such|cli|command|cache|caching|native|asyncio|async|django|yaml)|not (found|mention|provide|support|supported|include|contain|built|part|integrate|available|implemented))\\b"
+   ],
+   "gold": [],
+   "negative": true
+  }
+ ],
+ "history": [
+  "v1: first 38 questions, written from the code at the pinned commits.",
+  "v2: auditing the first baseline run found 4 scoring or ground-truth mistakes (not model errors): clk-09 (regex wanted the literal 'exit_code' but answers say 'exit code'), slg-04 (regex wanted 'decamelize' but answers say 'decamelization'), slg-09 (negation regex lacked 'cache'/'memoize' style verbs; negation is now anchored to the start of the answer and rejects a leading 'Yes'), clk-13 (the _available_shells registry at shell_completion.py:550-555 is valid evidence and was missing from the gold). its-13 was ambiguous ('support' could mean via a custom algorithm) and now asks about built-in support. Existing traces were re-scored, not re-run."
+ ]
+}

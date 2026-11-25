@@ -66,10 +66,11 @@ class Agent:
         max_steps: int = 8,
         token_budget: int = 150_000,
         max_repairs: int = 1,
+        tools: ToolRunner | None = None,
     ) -> None:
         self.llm, self.store, self.embedder, self.root = llm, store, embedder, root
         self.max_steps, self.token_budget, self.max_repairs = max_steps, token_budget, max_repairs
-        self.tools = ToolRunner(store, embedder, root)
+        self.tools = tools or ToolRunner(store, embedder, root)
 
     # -- main loop ------------------------------------------------------
     def run(self, question: str) -> AgentResult:
