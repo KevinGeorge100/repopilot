@@ -48,13 +48,29 @@ Tools: `index_repo` (background, then poll `repo_status`), `search_code`, `read_
 `review_pr`. The first four read-only tools need no LLM key; `ask_repo` and `review_pr` use the configured provider.
 Deliberate failures (not indexed yet, bad repo name, path escape) come back as readable tool errors.
 
+## Evaluation
+38 questions over three repos pinned to exact commits, scored deterministically (expected facts, a verified citation
+on the right lines, no unread citations), including 6 where the right answer is "not in this repo".
+On `gemini-3.5-flash-lite`, one run per variant:
+
+| | before | after |
+|---|---|---|
+| Questions that ended with no answer | 3 | 0 |
+| Repeated searches | 19 | 4 |
+| Tokens per question | 22.7k | 13.8k |
+| Passed (same 36 questions) | 83% | 92% |
+
+The pass-rate change is within noise for 36 questions; the first three rows have clear causes in the traces. Full
+numbers, retrieval measurements, known failures and caveats: [evals/RESULTS.md](evals/RESULTS.md). Method and commands:
+[evals/README.md](evals/README.md).
+
 ## Safety
 Public GitHub URLs only, shallow clones, read-only tools, repo text treated as untrusted data, per-IP rate
 limits, step and token budgets, chunk cap per repo. Code snippets are sent to the LLM provider: do not index
 private code.
 
 ## Status
-See `ROADMAP.md`. Tests: `uv run pytest` (103), `cd web && npm run lint && npm run build`.
+See `ROADMAP.md`. Tests: `uv run pytest` (168), `cd web && npm run lint && npm run build`.
 
 ## License
 MIT. See `LICENSE`.

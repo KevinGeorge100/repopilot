@@ -119,7 +119,7 @@ PROVIDERS: dict[str, dict[str, str | None]] = {
     "gemini": {
         "key_env": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-        "model": "gemini-3.1-flash-lite",
+        "model": "gemini-3.5-flash-lite",  # the model the evaluation measured; 3.1-flash-lite returned 503s under load
     },
     "groq": {"key_env": "GROQ_API_KEY", "base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-120b"},
     "openrouter": {"key_env": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1", "model": None},

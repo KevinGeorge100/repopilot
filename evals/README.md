@@ -45,6 +45,15 @@ uv run repopilot eval run variant --k 5
 uv run repopilot eval report evals/results/variant --baseline evals/results/baseline
 ```
 
+Retrieval alone (no model, free, exact):
+
+```bash
+uv run repopilot eval retrieval                      # where does the gold evidence rank for each question?
+uv run repopilot eval retrieval --no-symbols         # same index, name matching off: an exact ablation
+uv run repopilot eval retrieval --queries-from evals/results/baseline   # replay a run's own searches
+uv run repopilot eval retrieval --embed-chars 700    # build an alternative index: accuracy against speed
+```
+
 `--k`, `--max-chars`, `--max-steps` change the agent without code edits. Runs are resumable (`--fresh` starts over),
 retry provider failures but not wrong answers, record any other exception instead of crashing, and stop at
 `--token-cap`. Traces are written to `evals/results/<label>/traces.jsonl` (git-ignored): one line per question with
