@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-PR_URL = re.compile(r"^https://github\.com/([\w.-]+)/([\w.-]+)/pull/(\d{1,7})/?$")
+PR_URL = re.compile(r"^https://github\.com/(\w[\w-]*)/((?!\.{1,2}/)[\w.-]+)/pull/(\d{1,7})/?$")
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 MAX_DIFF_BYTES = 1_500_000
 MAX_FILES = 60

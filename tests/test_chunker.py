@@ -48,7 +48,7 @@ def test_valid_urls(url):
     assert validate_url(url) == url
 
 
-@pytest.mark.parametrize("url", ["--upload-pack=evil", "file:///etc/passwd", "https://evil.com/a/b", "git@github.com:a/b"])
+@pytest.mark.parametrize("url", ["--upload-pack=evil", "file:///etc/passwd", "https://evil.com/a/b", "git@github.com:a/b", "https://github.com/../x", "https://github.com/a/..", "https://github.com/.x/y", "https://github.com/a/."])
 def test_invalid_urls_rejected(url):
     with pytest.raises(ValueError):
         validate_url(url)

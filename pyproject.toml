@@ -13,6 +13,7 @@ dependencies = [
     "anthropic>=2.14.0",
     "fastapi>=0.165.0",
     "fastembed>=0.9.1",
+    "mcp>=2.3.0",
     "numpy>=2.5.5",
     "pydantic>=2.14.4",
     "tree-sitter>=0.27.0",

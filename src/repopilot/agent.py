@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .citations import Citation, CitationReport, verify
@@ -38,6 +38,22 @@ class AgentResult:
     usage: Usage
     stopped: str  # "done" | "max_steps" | "budget"
     events: list[Event] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        c = self.citations
+        return {
+            "answer": self.answer,
+            "stopped": self.stopped,
+            "steps": self.steps,
+            "usage": asdict(self.usage),
+            "citations": {
+                "valid": [{"path": x.path, "start": x.start, "end": x.end} for x in c.cited],
+                "invalid": [{"citation": a, "reason": b} for a, b in c.invalid],
+                "ungrounded": c.ungrounded,
+                "validity": c.validity,
+                "ok": c.ok,
+            },
+        }
 
 
 class Agent:

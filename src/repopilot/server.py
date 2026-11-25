@@ -3,14 +3,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
-import shutil
 import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -21,27 +18,13 @@ from pydantic import BaseModel, Field
 from .agent import Agent, AgentResult
 from .diff import fetch_pr_diff, parse_diff, parse_pr_url
 from .embed import Embedder, FastEmbedder
-from .ingest import clone, validate_url
+from .indexing import IndexManager, repo_id_from_url
+from .ingest import clone
 from .llm import LLM, make_llm
-from .pipeline import build_index
 from .review import PRReviewer
 from .store import Store
 from .toolbox import ToolRunner
 from .tools import ToolError, _resolve
-
-REPO_ID = re.compile(r"^[\w.-]+--[\w.-]+$")
-
-
-@dataclass
-class Job:
-    id: str
-    url: str
-    status: str = "queued"  # queued|cloning|chunking|embedding|ready|error
-    done: int = 0
-    total: int = 0
-    chunks: int = 0
-    truncated: bool = False
-    error: str | None = None
 
 
 class RateLimiter:
@@ -75,30 +58,12 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
 
 
-def repo_id_from_url(url: str) -> str:
-    owner, name = validate_url(url).rstrip("/").removesuffix(".git").split("/")[-2:]
-    return f"{owner}--{name}"
-
-
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def result_to_dict(r: AgentResult) -> dict:
-    c = r.citations
-    return {
-        "answer": r.answer,
-        "stopped": r.stopped,
-        "steps": r.steps,
-        "usage": asdict(r.usage),
-        "citations": {
-            "valid": [{"path": x.path, "start": x.start, "end": x.end} for x in c.cited],
-            "invalid": [{"citation": a, "reason": b} for a, b in c.invalid],
-            "ungrounded": c.ungrounded,
-            "validity": c.validity,
-            "ok": c.ok,
-        },
-    }
+    return r.to_dict()
 
 
 def create_app(
@@ -112,9 +77,7 @@ def create_app(
 ) -> FastAPI:
     workdir = workdir or Path(os.environ.get("REPOPILOT_WORKDIR", ".repopilot"))
     embedder = embedder or FastEmbedder()
-    jobs: dict[str, Job] = {}
-    lock = threading.Lock()
-    pool = ThreadPoolExecutor(max_workers=1)  # one index at a time: CPU-bound
+    manager = IndexManager(workdir, embedder, clone_fn)
     limiter = RateLimiter()
 
     app = FastAPI(title="RepoPilot", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -122,30 +85,16 @@ def create_app(
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"])
 
     def repo_dir(rid: str) -> Path:
-        if not REPO_ID.match(rid):
-            raise HTTPException(400, "invalid repo id")
-        return workdir / "repos" / rid
+        try:
+            return manager.repo_dir(rid)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
 
     def db_path(rid: str) -> Path:
-        return workdir / "index" / f"{rid}.db"
+        return manager.db_path(rid)
 
     def client_ip(req: Request) -> str:
         return (req.headers.get("x-forwarded-for", "").split(",")[0].strip()) or (req.client.host if req.client else "?")
-
-    def run_index(job: Job) -> None:
-        def progress(phase: str, done: int, total: int) -> None:
-            job.status, job.done, job.total = phase, done, total
-
-        try:
-            job.status = "cloning"
-            dest = repo_dir(job.id)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            clone_fn(job.url, dest)
-            summary = build_index(dest, db_path(job.id), embedder, progress)
-            job.chunks, job.truncated, job.status = summary.chunks, summary.truncated, "ready"
-        except Exception as e:  # noqa: BLE001 - surface any failure to the UI, never crash the worker
-            job.status, job.error = "error", f"{type(e).__name__}: {str(e)[:200]}"
-            shutil.rmtree(repo_dir(job.id), ignore_errors=True)
 
     @app.get("/api/health")
     def health() -> dict:
@@ -157,27 +106,19 @@ def create_app(
             rid = repo_id_from_url(body.url)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
-        with lock:
-            existing = jobs.get(rid)
-            if existing and existing.status not in ("error",):
-                return asdict(existing)
-            if db_path(rid).exists() and not existing:
-                jobs[rid] = Job(rid, body.url, "ready", chunks=Store(db_path(rid)).count())
-                return asdict(jobs[rid])
-            if not limiter.allow(f"index:{client_ip(req)}", index_limit, 3600):
-                raise HTTPException(429, "indexing rate limit reached; try again later")
-            job = jobs[rid] = Job(rid, body.url)
-        pool.submit(run_index, job)
-        return asdict(job)
+        existing = manager.get(rid)
+        if existing and existing.status != "error":
+            return asdict(existing)
+        if not limiter.allow(f"index:{client_ip(req)}", index_limit, 3600):
+            raise HTTPException(429, "indexing rate limit reached; try again later")
+        return asdict(manager.start(body.url))
 
     @app.get("/api/repos/{rid}")
     def repo_status(rid: str) -> dict:
         repo_dir(rid)  # validates id
-        job = jobs.get(rid)
+        job = manager.get(rid)
         if job:
             return asdict(job)
-        if db_path(rid).exists():
-            return asdict(Job(rid, "", "ready", chunks=Store(db_path(rid)).count()))
         raise HTTPException(404, "unknown repo")
 
     @app.get("/api/repos/{rid}/file")
