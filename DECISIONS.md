@@ -26,6 +26,9 @@
 | 18 | PR review returns findings through a terminal `submit_review` tool (portable across providers). Each finding is validated: path is in the diff, range is at most 40 lines, and it overlaps a line the PR ADDED. Rejections trigger one repair turn; unanchored findings are never shown | Same principle as citations: do not show what cannot be verified | Evals show valid findings are being rejected |
 | 19 | PR diffs come from the GitHub REST API (`Accept: application/vnd.github.diff`), not `github.com/<pr>.diff`; optional `GITHUB_TOKEN`; public PRs only; 1.5 MB cap | The `.diff` URL redirects to a second host (blocked in our sandbox, and a fragile dependency); the API is documented | API rate limits bite (60/hour unauthenticated) |
 | 20 | Repo tools are optional in review: if the repo is indexed the reviewer can search the default branch, otherwise it reviews the diff alone | Reviews must work on any public PR without waiting for an index | Reviews miss cross-file bugs often |
+| 21 | MCP server is local stdio on the official SDK (v2: `MCPServer`, not `FastMCP`). Seven tools; the read-only ones (search, read, list, status) need no LLM key so the server is useful on its own. Indexing runs in the background and clients poll `repo_status` | Assistants time out on multi-minute calls; a key-free core makes it easy to adopt | Clients gain a long-running-task protocol we can use instead of polling |
+| 22 | Expected failures are converted to MCP `ToolError` by a decorator | In MCP 2.x any other exception is a crash: the model sees only "Error executing tool" and the server logs a traceback | SDK changes this default |
+| 23 | Owner/repo patterns reject dot-only names (`..`) and owners with dots, in the URL validator, PR URL parser and repo-id check | A test showed `../etc` resolved to a valid repo id. Not exploitable (the id is one directory name) but sloppy | n/a |
 
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
@@ -44,3 +47,8 @@
 - Live check on a real PR (setup-uv 5 to 7): clean review, no invented problems.
 - The sandbox proxy only allows GitHub reads for attached repos, so live reviews here are limited to KevinGeorge100/repopilot PRs.
 - Review UI is not built yet: the evidence panel shows files, but findings anchor to diff lines, so the UI needs a diff view.
+
+## Day 5 findings (MCP)
+- Verified end to end over a real stdio subprocess with the live LLM: status, search, ask (4 verified citations), PR review of a real PR, and a path-escape refused with a readable error. Tested with the MCP SDK's own client, not with Claude Code itself.
+- MCP SDK 2.x renamed FastMCP to MCPServer and changed error semantics; tests pin the behaviour we depend on.
+- Review UI is still not built (needs a diff view).

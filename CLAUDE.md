@@ -11,7 +11,8 @@ Cited code intelligence for GitHub repos: ingest -> index -> agent Q&A with file
 - `web/`  Next.js 15 UI (self-hosted fonts, no UI kit). Design: highlighter-pen evidence panel; tokens in `web/app/globals.css`
 - `toolbox.py`  tool schemas + ToolRunner shared by every agent loop
 - `diff.py`, `review.py`  unified-diff parser with new-side line numbers; PR reviewer whose findings must anchor to added lines
-- (Day 5, next) MCP server
+- `indexing.py`  IndexManager: background index jobs shared by the API and MCP
+- `mcp_server.py`  MCP server (official SDK v2 `MCPServer`), run with `repopilot mcp`; raise `ValueError`/`RuntimeError` for expected failures, they become MCP ToolErrors
 - (Day 6) `evals/` harness; `make eval`
 
 ## Conventions
