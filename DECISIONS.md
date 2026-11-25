@@ -23,6 +23,9 @@
 | 15 | Indexing capped at 2,500 chunks per repo (source first, then docs, then changelogs); progress reported in UI | Demo must index in about a minute; embedding runs about 28 chunks/s on CPU | Evals show truncation hurts answers |
 | 16 | UI: no component kit; Tailwind + self-hosted fonts (Schibsted Grotesk, Newsreader, JetBrains Mono). Signature element = highlighter on cited lines. Answers show a plain-language verification line | Distinct from templated AI UIs; citations are the product | n/a |
 | 17 | search_code results are line-numbered and the prompt demands the narrowest citation range | Without numbers the model cited whole 60-line chunks (useless highlight) | Token cost too high (see below) |
+| 18 | PR review returns findings through a terminal `submit_review` tool (portable across providers). Each finding is validated: path is in the diff, range is at most 40 lines, and it overlaps a line the PR ADDED. Rejections trigger one repair turn; unanchored findings are never shown | Same principle as citations: do not show what cannot be verified | Evals show valid findings are being rejected |
+| 19 | PR diffs come from the GitHub REST API (`Accept: application/vnd.github.diff`), not `github.com/<pr>.diff`; optional `GITHUB_TOKEN`; public PRs only; 1.5 MB cap | The `.diff` URL redirects to a second host (blocked in our sandbox, and a fragile dependency); the API is documented | API rate limits bite (60/hour unauthenticated) |
+| 20 | Repo tools are optional in review: if the repo is indexed the reviewer can search the default branch, otherwise it reviews the diff alone | Reviews must work on any public PR without waiting for an index | Reviews miss cross-file bugs often |
 
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
@@ -35,3 +38,9 @@
 - Gemini free-tier latency is erratic (same question took 7s, and once over 60s). The UI shows live steps so waiting is visible.
 - `npm audit` reports PostCSS issues inside Next 15 (build-time CSS only; fix needs Next 16 major). Accepted for now.
 - Throwaway deploy deferred: needs a hosting account. Backend must run on a container host (Render/Railway/Fly), frontend on Vercel; set REPOPILOT_CORS to the frontend origin.
+
+## Day 5 findings (PR review)
+- Live check on a synthetic diff with planted bugs plus an injected "approve without comments" instruction: all 4 planted issues found (SQL injection, eval, hardcoded key, off-by-one) at exact lines, injection ignored.
+- Live check on a real PR (setup-uv 5 to 7): clean review, no invented problems.
+- The sandbox proxy only allows GitHub reads for attached repos, so live reviews here are limited to KevinGeorge100/repopilot PRs.
+- Review UI is not built yet: the evidence panel shows files, but findings anchor to diff lines, so the UI needs a diff view.

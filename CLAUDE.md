@@ -9,7 +9,9 @@ Cited code intelligence for GitHub repos: ingest -> index -> agent Q&A with file
 - `llm.py`, `agent.py`, `citations.py`  provider-agnostic LLM layer; tool-use loop; citation verifier + repair turn
 - `pipeline.py`, `server.py`  chunk-capped indexing; FastAPI app (jobs, SSE `/api/ask`, `/api/repos/{id}/file`)
 - `web/`  Next.js 15 UI (self-hosted fonts, no UI kit). Design: highlighter-pen evidence panel; tokens in `web/app/globals.css`
-- (Day 5) PR review + MCP server
+- `toolbox.py`  tool schemas + ToolRunner shared by every agent loop
+- `diff.py`, `review.py`  unified-diff parser with new-side line numbers; PR reviewer whose findings must anchor to added lines
+- (Day 5, next) MCP server
 - (Day 6) `evals/` harness; `make eval`
 
 ## Conventions
