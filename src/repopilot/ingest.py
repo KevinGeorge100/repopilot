@@ -10,7 +10,8 @@ from .chunker import Chunk, chunk_file
 SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__", "vendor", ".next", "target"}
 SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".pdf", ".zip", ".lock", ".min.js", ".map", ".woff", ".woff2"}
 MAX_FILE_BYTES = 300_000
-GITHUB_URL = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+?(?:\.git)?/?$")
+# GitHub owners have no dots; repo names may, but are never "." or "..".
+GITHUB_URL = re.compile(r"^https://github\.com/\w[\w-]*/(?!\.{1,2}(?:\.git)?/?$)[\w.-]+?(?:\.git)?/?$")
 
 
 def validate_url(url: str) -> str:

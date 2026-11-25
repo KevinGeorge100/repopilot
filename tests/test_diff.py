@@ -54,7 +54,7 @@ def test_valid_pr_urls(url):
 
 
 @pytest.mark.parametrize(
-    "url", ["https://evil.com/a/b/pull/1", "https://github.com/a/b/issues/1", "https://github.com/a/b/pull/x", "file:///etc/passwd"]
+    "url", ["https://evil.com/a/b/pull/1", "https://github.com/a/b/issues/1", "https://github.com/a/b/pull/x", "file:///etc/passwd", "https://github.com/../b/pull/1", "https://github.com/a/../pull/1"]
 )
 def test_invalid_pr_urls(url):
     with pytest.raises(ValueError):

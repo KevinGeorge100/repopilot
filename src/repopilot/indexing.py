@@ -14,7 +14,7 @@ from .ingest import clone, validate_url
 from .pipeline import build_index
 from .store import Store
 
-REPO_ID = re.compile(r"^[\w.-]+--[\w.-]+$")
+REPO_ID = re.compile(r"^\w[\w-]*--(?!\.{1,2}$)[\w.-]+$")
 
 
 @dataclass
