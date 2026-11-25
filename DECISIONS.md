@@ -18,7 +18,7 @@
 ## Known issues / next tuning
 - Indexing click (1.8k chunks) took ~4 min on CPU; batch size and chunk text length need tuning (Day 6 perf pass), or index lazily per repo in the background with a progress bar.
 - Test files still rank high for behavioural questions; consider a 0.8 prior for tests/.
-| 13 | LLM layer is provider-agnostic. Free-tier default = Gemini (`gemini-3.1-flash-lite`) via its OpenAI-compatible endpoint; Anthropic stays supported (prompt caching only there). Switch with `--provider` or `REPOPILOT_PROVIDER` / `REPOPILOT_MODEL` | Anthropic API needs paid credits; free tiers let the project run at zero cost | Evals show free models fail the citation bar -> evaluate paid models and report both |
+| 13 | LLM layer is provider-agnostic. Free-tier default = Gemini (`gemini-3.5-flash-lite`, see #29) via its OpenAI-compatible endpoint; Anthropic stays supported (prompt caching only there). Switch with `--provider` or `REPOPILOT_PROVIDER` / `REPOPILOT_MODEL` | Anthropic API needs paid credits; free tiers let the project run at zero cost | Evals show free models fail the citation bar -> evaluate paid models and report both |
 | 14 | Gemini key is stored as an environment network credential for generativelanguage.googleapis.com; the proxy injects it. Run locally with `GEMINI_API_KEY=proxy-injected` | Key never appears in chat, code or git | Key rotated or environment changes |
 | 15 | Indexing capped at 2,500 chunks per repo (source first, then docs, then changelogs); progress reported in UI | Demo must index in about a minute; embedding runs about 28 chunks/s on CPU | Evals show truncation hurts answers |
 | 16 | UI: no component kit; Tailwind + self-hosted fonts (Schibsted Grotesk, Newsreader, JetBrains Mono). Signature element = highlighter on cited lines. Answers show a plain-language verification line | Distinct from templated AI UIs; citations are the product | n/a |
@@ -32,8 +32,10 @@
 
 | 24 | Evaluation is deterministic (fact regexes, gold evidence overlap, citation checks), no LLM judge, on repos pinned to exact SHAs with a self-verifying ground truth (`eval verify`). 6 of 38 questions are negative ("not in this repo") | Reproducible, free to re-score, and negatives catch fabrication. The cost is brittleness: regexes can miss a correct answer in other words | A second author or real user questions are available |
 | 25 | Auditing the first baseline's 9 failures found 4 were my scoring or ground-truth mistakes. Fixed in dataset v2 and the stored answers re-scored with `eval rescore`, not re-run. The fixes are listed in the dataset's `history` | Reporting 76% when the true figure was 84% would have undersold the system and hidden how brittle regex scoring is | n/a |
-
 | 26 | Agent loop: a repeated tool call returns a hint (searches compare by words); the last step removes tools, and if the model still calls one that turn is dropped and plain text is requested; an answer that opens by saying the thing is absent is accepted without citations once the agent has searched (never after a leading "Yes", with an invalid citation, or without searching); `path:12,40-45` lists are parsed | Evaluation showed empty answers after 8 repeated searches, and our citation check pushing the model to cite lines it never read | Abstention heuristics cause false accepts |
+| 27 | Retrieval: oversized classes are split into per-method chunks; every chunk records the symbol it defines (all windows of a long function); a third ranking signal matches query identifiers to symbols. On the baseline agent's own searches: hit@1 31% to 53%, MRR 0.52 to 0.68, recall@8 88% to 94% | Identifier-style searches are what the agent issues, and keyword plus vector search drown definitions in tests and docs | Evals show wrong-method matches on common names |
+| 28 | Embed the first 1000 characters of each chunk (was 1500). 7.4 to 10.3 chunks/s, click index 263s to 185s, recall@8 unchanged (91%). 700 chars halves the time but loses a question at rank 8 | Index time is the demo's main wait | A faster embedding model replaces this trade-off |
+| 29 | Default Gemini model is `gemini-3.5-flash-lite` (was `gemini-3.1-flash-lite`) | It is the model every evaluation number describes, and 3.1 returned 503 "high demand" on 2 of 3 probes and failed the first baseline attempt | Availability changes; re-probe |
 
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
@@ -57,3 +59,9 @@
 - Verified end to end over a real stdio subprocess with the live LLM: status, search, ask (4 verified citations), PR review of a real PR, and a path-escape refused with a readable error. Tested with the MCP SDK's own client, not with Claude Code itself.
 - MCP SDK 2.x renamed FastMCP to MCPServer and changed error semantics; tests pin the behaviour we depend on.
 - Review UI is still not built (needs a diff view).
+
+## Day 6 findings (evaluation)
+- Full numbers, caveats and reproduction commands: `evals/RESULTS.md`. Method: `evals/README.md`.
+- The free tier has a **daily** per-model request quota (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`) that ended v2 two questions early. Evaluations that need many runs must be spread over days or use a paid key. Providers also return 503 "high demand" in spikes; `--abort-after` stops a run during an outage and the same command resumes.
+- Not yet done: an end-to-end run on the final index (v3: all windows tagged, 1000-char embeddings); a repeat run to measure run-to-run noise; completing slg-06 and slg-09 for v2.
+- Persistent failure `its-14`: the model calls Django-compatible key derivation an "integration".

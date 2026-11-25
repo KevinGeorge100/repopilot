@@ -13,7 +13,7 @@ from ..agent import Agent
 from ..embed import Embedder
 from ..llm import LLM
 from ..pipeline import build_index
-from ..store import Store
+from ..store import EMBED_CHARS, INDEX_VERSION, Store
 from ..toolbox import MAX_TOOL_RESULT_CHARS, ToolRunner
 from .dataset import Dataset, Runner, ensure_checkout
 from .metrics import score_answer
@@ -58,7 +58,7 @@ def prepare_repos(
         marker = workdir / "index" / f"{name}.json"
         if not force and db.exists() and marker.exists():
             info = json.loads(marker.read_text())
-            if info.get("sha") == spec.sha:
+            if info.get("sha") == spec.sha and info.get("index_version") == INDEX_VERSION:
                 log(f"  {name}: reusing index ({info['chunks']} chunks, built in {info['index_seconds']:.0f}s)")
                 handles[name], stats[name] = RepoHandle(root, db), info
                 continue
@@ -67,6 +67,8 @@ def prepare_repos(
         summary = build_index(root, db, embedder)
         info = {
             "sha": spec.sha,
+            "index_version": INDEX_VERSION,
+            "embed_chars": EMBED_CHARS,
             "chunks": summary.chunks,
             "chunks_found": summary.total_chunks_found,
             "truncated": summary.truncated,
