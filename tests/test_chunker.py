@@ -52,3 +52,50 @@ def test_valid_urls(url):
 def test_invalid_urls_rejected(url):
     with pytest.raises(ValueError):
         validate_url(url)
+
+
+# ---- symbols and class splitting (added with name-based retrieval) -------------
+def _method(name: str, body_lines: int = 30) -> str:
+    return f"    def {name}(self):\n" + "".join(f"        x{i} = {i}\n" for i in range(body_lines)) + "        return 0\n\n"
+
+
+BIG_CLASS = "import os\n\n\nclass Big:\n    '''Docstring.'''\n    attr = 1\n\n" + _method("alpha") + _method("beta") + _method("gamma")
+
+
+def test_chunks_record_the_symbol_they_define():
+    chunks = chunk_file("a.py", PY)
+    assert {c.symbol for c in chunks if c.kind == "definition"} == {"foo", "Bar"}
+    assert all(c.symbol is None for c in chunks if c.kind == "window")  # the import/constant gap defines nothing
+
+
+def test_an_oversized_class_is_split_into_methods_with_their_own_symbols():
+    chunks = chunk_file("big.py", BIG_CLASS)
+    methods = {c.symbol: c for c in chunks if c.kind == "definition"}
+    assert set(methods) == {"alpha", "beta", "gamma"}
+    header = [c for c in chunks if c.symbol == "Big"]
+    assert len(header) == 1 and header[0].kind == "window" and "Docstring" in header[0].text
+    for name, c in methods.items():  # exact ranges: the chunk starts at its def line
+        assert c.text.splitlines()[0].strip() == f"def {name}(self):"
+    lines = BIG_CLASS.splitlines()
+    covered = {n for c in chunks for n in range(c.start_line, c.end_line + 1)}
+    assert [n for n, ln in enumerate(lines, 1) if ln.strip() and n not in covered] == []  # nothing lost
+
+
+def test_an_oversized_function_becomes_windows_that_all_carry_its_name():
+    src = "def huge():\n" + "".join(f"    y{i} = {i}\n" for i in range(150)) + "    return 1\n"
+    chunks = chunk_file("h.py", src)
+    assert len(chunks) > 2 and all(c.kind == "window" for c in chunks)
+    assert all(c.symbol == "huge" for c in chunks)  # a question about code deep inside still matches the name
+
+
+def test_keyword_tokens_never_become_one_line_definitions():
+    """Regression: the `class` keyword inside a class node once matched as a definition of its own."""
+    chunks = chunk_file("big.py", BIG_CLASS)
+    assert all(c.end_line > c.start_line for c in chunks if c.kind == "definition")
+    assert not any(c.text.strip() == "class Big:" and c.kind == "definition" for c in chunks)
+
+
+def test_javascript_functions_get_symbols_too():
+    src = "export default function slugify(input) {\n  return input.trim();\n}\n\nfunction other() {\n  return 1;\n}\n"
+    names = {c.symbol for c in chunk_file("index.js", src) if c.kind == "definition"}
+    assert names == {"slugify", "other"}
