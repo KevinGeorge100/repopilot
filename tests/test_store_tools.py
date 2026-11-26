@@ -123,3 +123,23 @@ def test_an_index_built_before_symbols_existed_still_searches(tmp_path):
     assert not store.has_symbols
     hit = store.search("foo", emb)[0]
     assert hit.chunk.citation == "a.py:1-2" and hit.chunk.symbol is None
+
+
+def test_fast_embedder_embeds_one_sequence_at_a_time_and_normalises():
+    """Batching pads every text to the longest in the batch: 3x slower and 3x the memory for identical vectors."""
+    import numpy as np
+
+    from repopilot.embed import EMBED_BATCH, FastEmbedder
+
+    seen = {}
+
+    class FakeModel:
+        def embed(self, texts, batch_size=256):
+            seen["batch_size"] = batch_size
+            return [np.array([3.0, 4.0] + [0.0] * 382, dtype=np.float32) for _ in texts]
+
+    emb = FastEmbedder()
+    emb._model = FakeModel()
+    vecs = emb.embed(["a", "b"])
+    assert EMBED_BATCH == 1 and seen["batch_size"] == 1
+    assert vecs.shape == (2, 384) and abs(float(np.linalg.norm(vecs[0])) - 1.0) < 1e-6

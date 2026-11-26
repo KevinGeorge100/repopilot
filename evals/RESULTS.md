@@ -69,8 +69,9 @@ thrasher, `clk-07`, is only found with name matching on.
 
 ## Index speed versus accuracy
 
-Embedding cost grows steeply with text length; batch size makes no difference. The first N characters of each chunk
-are embedded; keyword and name search still see the whole chunk.
+Embedding cost grows steeply with text length. The first N characters of each chunk are embedded; keyword and name
+search still see the whole chunk. (Batch size is covered in the next section: an earlier version of this page said it
+made no difference, which was wrong. I had only compared 16, 32 and 64.)
 
 | Embedded characters | chunks per second | click index build | hit@1 | hit@3 | hit@8 | MRR |
 |---|---|---|---|---|---|---|
@@ -83,6 +84,22 @@ Measured with the question text as the query, before the later change that tags 
 
 1000 was chosen: a third faster with the same recall@8. 700 halves the time but loses a question at rank 8 and drops
 `clk-06` out of the top 20. The differences are one question each, so this is a judgement, not a proof.
+
+### Batch size: the bigger win
+
+fastembed pads every text in a batch to the longest one, and its default batch is 256. Chunks vary a lot in length, so
+most of the compute and memory goes on padding. Measured on 200 of click's chunks (1000 characters embedded):
+
+| Batch size | chunks per second | peak memory indexing itsdangerous | vector difference vs batch 32 |
+|---|---|---|---|
+| 32 | 10.6 | 869 MB | none |
+| 8 | 14.5 | 461 MB | none |
+| 4 | 17.7 | 356 MB | none |
+| **1 (now)** | **29.6** | **280 MB** | **none (max 0.0)** |
+
+The output vectors are identical, so retrieval is unchanged (hit@1 66%, hit@8 97%, MRR 0.786, verified after the
+change). `click` now indexes in **71s instead of 185s**, `itsdangerous` in 7s instead of 18s, and indexing fits in a
+512 MB instance, which batch 32 did not (it needed 869 MB). Serving a question peaks at 298 MB.
 
 ## Known failures
 

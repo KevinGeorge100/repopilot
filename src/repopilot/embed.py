@@ -15,6 +15,12 @@ class Embedder(Protocol):
         """Return an (n, dim) float32 array of L2-normalised vectors."""
 
 
+# fastembed pads every text in a batch to the longest one (default batch 256). Chunks vary a lot in length, so
+# that wastes most of the compute and memory. Measured on click's chunks, with identical output vectors:
+# batch 32: 10.6 chunks/s, 869 MB peak; batch 1: 29.6 chunks/s, 280 MB peak.
+EMBED_BATCH = 1
+
+
 class FastEmbedder:
     """Local ONNX model via fastembed. Loaded lazily so imports stay cheap."""
 
@@ -28,7 +34,7 @@ class FastEmbedder:
             from fastembed import TextEmbedding
 
             self._model = TextEmbedding(self.model_name)
-        vecs = np.array(list(self._model.embed(texts)), dtype=np.float32)
+        vecs = np.array(list(self._model.embed(texts, batch_size=EMBED_BATCH)), dtype=np.float32)
         return vecs / np.maximum(np.linalg.norm(vecs, axis=1, keepdims=True), 1e-9)
 
 
