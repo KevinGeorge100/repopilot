@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnswerView } from "@/components/AnswerView";
+import { ReadingTips } from "@/components/Guide";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { Landing, SOURCE_URL } from "@/components/Landing";
 import { Trail } from "@/components/Trail";
@@ -45,6 +46,7 @@ export default function Home() {
   const [active, setActive] = useState<{ turn: number; cite: Citation } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [config, setConfig] = useState<Config | null>(null);
+  const [showTips, setShowTips] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const busy = turns.some((t) => t.status === "working");
@@ -184,6 +186,9 @@ export default function Home() {
           <p className="text-lg font-bold tracking-tight">RepoPilot</p>
           <div className="flex min-w-0 items-center gap-3 text-sm">
             <span className="truncate font-mono">{repo.id.replace("--", "/")}</span>
+            <button onClick={() => setShowTips((v) => !v)} className="shrink-0 text-graphite underline underline-offset-4">
+              Help
+            </button>
             <button onClick={reset} className="shrink-0 text-cobalt-ink underline underline-offset-4">
               Change repo
             </button>
@@ -200,6 +205,7 @@ export default function Home() {
               dropped first.
             </p>
           )}
+          {(turns.length > 0 || showTips) && <ReadingTips forceOpen={showTips} onDismiss={() => setShowTips(false)} />}
           {turns.length === 0 && (
             <div className="max-w-[68ch] pt-8">
               <h1 className="text-3xl font-bold tracking-tight">What do you want to know?</h1>
