@@ -37,6 +37,8 @@
 | 28 | Embed the first 1000 characters of each chunk (was 1500). 7.4 to 10.3 chunks/s, click index 263s to 185s, recall@8 unchanged (91%). 700 chars halves the time but loses a question at rank 8 | Index time is the demo's main wait | A faster embedding model replaces this trade-off |
 | 29 | Default Gemini model is `gemini-3.5-flash-lite` (was `gemini-3.1-flash-lite`) | It is the model every evaluation number describes, and 3.1 returned 503 "high demand" on 2 of 3 probes and failed the first baseline attempt | Availability changes; re-probe |
 
+| 30 | Embed one text per model call (`EMBED_BATCH = 1`). 29.6 vs 10.6 chunks/s on click's chunks, peak memory 280 MB vs 869 MB, identical vectors; click index 185s to 71s | fastembed pads every text in a batch to the longest, so large batches waste most of the work. My earlier 'batch size makes no difference' claim was wrong: I had only compared 16 to 64. Memory is what makes live indexing possible on a 512 MB host | A model whose runtime does not pad |
+
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
 - `gemini-3.8-flash` hung (read timeout) in testing; `gemini-3.1-flash-lite` answered in <1s. Re-test other models in the Day 6 evals.
