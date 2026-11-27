@@ -50,7 +50,7 @@ export type Turn = {
   question: string;
   steps: Step[];
   repairing: boolean;
-  status: "working" | "done" | "error";
+  status: "queued" | "working" | "done" | "error";
   answer?: AnswerPayload;
   error?: string;
 };

@@ -53,7 +53,7 @@ export function EvidencePanel({ repo, sources, active, onSelect, onClose }: Prop
 
   let firstHit = true;
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-start justify-between gap-3 border-b border-rule px-4 py-3">
         <div className="min-w-0">
           <p className="truncate font-mono text-sm font-medium" title={active.path}>
