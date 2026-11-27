@@ -110,6 +110,8 @@ def create_app(
     static_dir: Path | None = None,
     daily_cap: int | None = None,
     max_chunks: int | None = None,
+    daily_index_cap: int | None = None,
+    max_user_repos: int | None = None,
 ) -> FastAPI:
     workdir = workdir or Path(os.environ.get("REPOPILOT_WORKDIR", ".repopilot"))
     embedder = embedder or FastEmbedder()
@@ -121,10 +123,15 @@ def create_app(
         daily_cap = int(os.environ.get("REPOPILOT_DAILY_ASK_CAP", "150"))
     if max_chunks is None and os.environ.get("REPOPILOT_MAX_CHUNKS"):
         max_chunks = int(os.environ["REPOPILOT_MAX_CHUNKS"])
-    manager = IndexManager(workdir, embedder, clone_fn, max_chunks)
+    if daily_index_cap is None:
+        daily_index_cap = int(os.environ.get("REPOPILOT_DAILY_INDEX_CAP", "40"))
+    if max_user_repos is None:
+        max_user_repos = int(os.environ.get("REPOPILOT_MAX_USER_REPOS", "6"))
+    manifest = load_manifest(demo_dir / "manifest.json") if (demo_dir / "manifest.json").exists() else []
+    manager = IndexManager(workdir, embedder, clone_fn, max_chunks, frozenset(r.id for r in manifest), max_user_repos)
     limiter = RateLimiter()
     cap = DailyCap(daily_cap)
-    manifest = load_manifest(demo_dir / "manifest.json") if (demo_dir / "manifest.json").exists() else []
+    index_cap = DailyCap(daily_index_cap)
     cache = AnswerCache.load(demo_dir / "answers.json")
     live_ok: list[bool] = []  # computed once: whether a model is configured at all
 
@@ -164,7 +171,8 @@ def create_app(
                 repos.append({"id": r.id, "name": r.name, "description": r.description, "chunks": job.chunks,
                               "examples": cache.examples(r.id)})
         return {"demo": demo_mode, "indexing": not demo_mode, "live_questions": live_ok[0],
-                "daily_remaining": cap.remaining, "repos": repos}
+                "daily_remaining": cap.remaining, "indexing_remaining": index_cap.remaining,
+                "max_chunks": manager.max_chunks, "repos": repos}
 
     @app.post("/api/repos", status_code=202)
     def index_repo(body: IndexRequest, req: Request) -> dict:
@@ -180,7 +188,9 @@ def create_app(
                 403, "This demo serves a fixed set of pre-indexed repositories. To index your own, run RepoPilot locally (see the README)."
             )
         if not limiter.allow(f"index:{client_ip(req)}", index_limit, 3600):
-            raise HTTPException(429, "indexing rate limit reached; try again later")
+            raise HTTPException(429, "You have added several repositories in the last hour. Try again later.")
+        if not index_cap.allow():
+            raise HTTPException(429, "Today's limit for adding new repositories has been reached. Try again tomorrow, or use one of the ready-made repos.")
         return asdict(manager.start(body.url))
 
     @app.get("/api/repos/{rid}")
@@ -210,6 +220,7 @@ def create_app(
         root, db = repo_dir(rid), db_path(rid)
         if not db.exists():
             raise HTTPException(404, "repo is not indexed yet")
+        manager.touch(rid)
         if entry := cache.get(rid, body.question):  # a real answer from an evaluation run: free and instant
             return StreamingResponse(
                 cached_events(entry), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}

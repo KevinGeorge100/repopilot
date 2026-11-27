@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnswerView } from "@/components/AnswerView";
+import { friendlyError } from "@/lib/errors";
 import { ask, getLines, type FileWindow } from "@/lib/api";
 import type { AnswerPayload, Citation, DemoRepo } from "@/lib/types";
 
@@ -87,7 +88,8 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
   const sorted = [...repos].sort((a, b) => a.chunks - b.chunks);
   const [repoId, setRepoId] = useState(sorted[0]?.id ?? "");
   const [q, setQ] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, AnswerPayload | "loading" | "error">>({});
+  const [answers, setAnswers] = useState<Record<string, AnswerPayload | "loading" | { error: string }>>({});
+  const [typed, setTyped] = useState("");
   const [cite, setCite] = useState<Citation | null>(null);
   const touched = useRef(false);
   const cache = useRef(answers);
@@ -102,25 +104,26 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
       setQ(question);
       setCite(null);
       const have = cache.current[k];
-      if (have && have !== "loading" && have !== "error") {
+      if (have && have !== "loading" && !("error" in have)) {
         setCite(have.citations.valid[0] ?? null);
         return;
       }
       setAnswers((a) => ({ ...a, [k]: "loading" }));
       let got: AnswerPayload | null = null;
+      let failure = "Couldn’t get an answer. Try another question.";
       try {
         await ask(id, question, {
           onToolCall: () => {},
           onToolResult: () => {},
           onRepair: () => {},
           onAnswer: (p) => (got = p),
-          onError: () => {},
+          onError: (m) => (failure = friendlyError(m)),
         });
-      } catch {
-        /* shown as the error state below */
+      } catch (e) {
+        failure = friendlyError((e as Error).message);
       }
       const ans = got as AnswerPayload | null;
-      setAnswers((a) => ({ ...a, [k]: ans ?? "error" }));
+      setAnswers((a) => ({ ...a, [k]: ans ?? { error: failure } }));
       if (ans && !(auto && touched.current)) setCite(ans.citations.valid[0] ?? null);
     },
     [],
@@ -141,7 +144,7 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
   if (!repo) return null;
   const k = q ? `${repo.id}|${q}` : "";
   const state = k ? answers[k] : undefined;
-  const answer = state && state !== "loading" && state !== "error" ? state : null;
+  const answer = state && state !== "loading" && !("error" in state) ? state : null;
 
   return (
     <section aria-label="Try it" className="mt-8 rounded-xl border border-rule bg-sheet p-3 sm:p-5">
@@ -186,9 +189,37 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
               </li>
             ))}
           </ul>
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (typed.trim().length >= 3 && !liveOff) choose(repo.id, typed.trim());
+            }}
+          >
+            <label className="sr-only" htmlFor="stage-q">
+              Ask your own question about {repo.name}
+            </label>
+            <input
+              id="stage-q"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              disabled={liveOff}
+              maxLength={1000}
+              autoComplete="off"
+              placeholder={liveOff ? "Live questions are paused right now" : "Or type your own question"}
+              className="min-w-0 flex-1 rounded-md border border-rule bg-white px-3 py-2 outline-none focus:border-cobalt disabled:bg-paper"
+            />
+            <button
+              type="submit"
+              disabled={liveOff || typed.trim().length < 3 || state === "loading"}
+              className="rounded-md bg-ink px-4 py-2 font-semibold text-sheet transition hover:bg-cobalt-ink disabled:bg-rule disabled:text-graphite"
+            >
+              Ask
+            </button>
+          </form>
           <div className="mt-4 min-h-[5rem]" aria-live="polite">
             {state === "loading" && <p className="text-graphite">Reading the code…</p>}
-            {state === "error" && <p className="text-alert">Couldn’t load that answer. Try another question.</p>}
+            {state && state !== "loading" && "error" in state && <p role="alert" className="text-alert">{state.error}</p>}
             {answer && (
               <AnswerView payload={answer} active={cite} onOpen={(c) => setCite(c)} />
             )}
@@ -201,8 +232,8 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-4">
         <p className="max-w-[56ch] text-sm text-graphite">
           {liveOff
-            ? "These answers are saved from a test run. Live questions are paused right now."
-            : "These answers are saved from a test run. In the full app you can type your own question."}
+            ? "The example answers are saved from a test run. Live questions are paused right now."
+            : "The example answers are saved from a test run. Questions you type are answered live."}
         </p>
         <button
           onClick={() => onOpenFull(repo.name)}
