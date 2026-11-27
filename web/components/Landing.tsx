@@ -1,4 +1,5 @@
 import type { Config } from "@/lib/types";
+import { Faq, HowItWorks } from "@/components/Guide";
 
 export const SOURCE_URL = "https://github.com/KevinGeorge100/repopilot";
 
@@ -14,7 +15,7 @@ export function Landing({ config, input, setInput, formError, onOpen }: Props) {
   const repos = config?.repos ?? [];
   const canIndex = config ? config.indexing : true;
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-4 py-16 sm:px-6">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-16 sm:px-6">
       <p className="mb-10 text-xl font-bold tracking-tight">RepoPilot</p>
       <h1 className="max-w-[18ch] text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
         Ask a repo anything. See the lines behind every answer.
@@ -98,6 +99,9 @@ export function Landing({ config, input, setInput, formError, onOpen }: Props) {
           {formError}
         </p>
       )}
+
+      <HowItWorks />
+      <Faq />
 
       <p className="mt-16 max-w-[62ch] text-sm text-graphite">
         Code snippets are sent to an AI provider to write each live answer, so don’t point this at anything private.{" "}
