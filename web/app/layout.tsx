@@ -9,14 +9,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f6fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#080c19" },
-  ],
+  themeColor: "#f4f6fb",
 };
 
-// Runs before first paint so there is no flash of the wrong theme. Falls back to the system setting.
-const THEME_INIT = `try{var t=localStorage.getItem("repopilot.theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){}`;
+// Runs before first paint so there is no flash of the wrong theme. Light is the default; a visitor's own choice (the toggle) is remembered.
+const THEME_INIT = `try{var t=localStorage.getItem("repopilot.theme");if(t!=="dark"){t="light"}document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
