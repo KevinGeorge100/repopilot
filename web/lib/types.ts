@@ -9,6 +9,8 @@ export type RepoStatus = {
   chunks: number;
   truncated: boolean;
   error: string | null;
+  embedded?: number;
+  embed_total?: number;
 };
 
 export type AnswerPayload = {

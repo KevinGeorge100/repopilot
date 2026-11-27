@@ -284,6 +284,7 @@ def eval_retrieval(
     symbols: bool = True,
     embed_chars: int | None = None,
     queries_from: Path | None = None,
+    text_only: bool = False,
 ) -> None:
     """Measure where the gold evidence ranks in search results. No model calls.
 
@@ -291,16 +292,25 @@ def eval_retrieval(
 
     --no-symbols turns name matching off on the same index. --embed-chars N builds a separate index that embeds
     only the first N characters of each chunk (stored beside the main one) to compare accuracy against speed.
+
+    --text-only measures the state a freshly added repo is in before its vectors finish: keyword and name search only.
     """
     import time
 
     from .evals.retrieval import evaluate_retrieval, summarize
     from .evals.runner import RepoHandle, prepare_repos
-    from .pipeline import build_index
+    from .pipeline import build_index, build_text_index
 
     ds = _load_eval_dataset(dataset)
     embedder = FastEmbedder()
     handles, _ = prepare_repos(ds, workdir, embedder, typer.echo)
+    if text_only:
+        only: dict[str, RepoHandle] = {}
+        for name, h in handles.items():
+            db = workdir / "index" / f"{name}.text.db"
+            build_text_index(h.root, db)
+            only[name] = RepoHandle(h.root, db)
+        handles = only
     if embed_chars is not None:
         alt: dict[str, RepoHandle] = {}
         for name, h in handles.items():
@@ -322,7 +332,7 @@ def eval_retrieval(
         s = summarize(evaluate_retrieval(ds, handles, embedder, symbols))
         source = ", question text as the query"
     pct = lambda x: "n/a" if x is None else f"{x * 100:.0f}%"
-    label = f"symbols {'on' if symbols else 'off'}, embed {embed_chars or 'default'} chars{source}"
+    label = f"symbols {'on' if symbols else 'off'}, {'text only, no vectors' if text_only else 'embed ' + str(embed_chars or 'default') + ' chars'}{source}"
     typer.echo(
         f"retrieval ({label}): {s['n']} positive questions | hit@1 {pct(s['hit@1'])}  hit@3 {pct(s['hit@3'])}  "
         f"hit@8 {pct(s['hit@8'])}  hit@20 {pct(s['hit@20'])}  MRR {s['mrr']:.3f}"

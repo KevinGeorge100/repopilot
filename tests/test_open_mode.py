@@ -94,3 +94,56 @@ def test_failed_clone_shows_a_plain_message(tmp_path: Path):
     rid = c.post("/api/repos", json={"url": URL}).json()["id"]
     st = wait_ready(c, rid)
     assert st["status"] == "error" and st["error"].startswith("Could not download")
+
+
+# ---- instant-ready indexing: ask first, vectors follow ----------------------------------------------------
+def test_text_only_index_is_searchable_then_vectors_are_added(tmp_path: Path):
+    from repopilot.chunker import chunk_file
+    from repopilot.store import Store
+
+    emb = HashEmbedder()
+    store = Store(tmp_path / "t.db")
+    store.add_text(chunk_file("cli.py", "def parse_args(argv):\n    return argv[1:]\n\n\ndef main():\n    return 0\n"))
+    assert store.pending() == 2
+    assert store.search("parse_args", emb)[0].chunk.symbol == "parse_args"  # keyword + name search, no vectors
+    store.embed_pending(emb, batch=1)
+    assert store.pending() == 0
+    assert store.search("parse arguments", emb)  # vector signal now contributes
+    store.embed_pending(emb)  # nothing left: a no-op
+
+
+class SlowEmbedder(HashEmbedder):
+    """Blocks embedding until released, so a test can look at the repo while vectors are still pending."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        import threading
+
+        self.gate = threading.Event()
+
+    def embed(self, texts):
+        self.gate.wait(10)
+        return super().embed(texts)
+
+
+def test_repo_is_ready_before_embedding_finishes(tmp_path: Path, fixture_repo: Path):  # noqa: F811
+    import shutil
+
+    emb = SlowEmbedder()
+
+    def fake_clone(url, dest):
+        shutil.copytree(fixture_repo, dest, dirs_exist_ok=True)
+        return dest
+
+    m = IndexManager(tmp_path, emb, fake_clone)
+    job = m.start(URL)
+    end = time.time() + 10
+    while job.status != "ready" and time.time() < end:
+        time.sleep(0.02)
+    assert job.status == "ready" and job.chunks > 0
+    assert job.embedded < job.embed_total  # vectors are still being computed in the background
+    emb.gate.set()
+    end = time.time() + 10
+    while job.embedded < job.embed_total and time.time() < end:
+        time.sleep(0.02)
+    assert job.embedded == job.embed_total > 0

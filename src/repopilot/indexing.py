@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .embed import Embedder
 from .ingest import clone, validate_url
-from .pipeline import build_index
+from .pipeline import build_text_index, embed_index
 from .store import Store
 
 REPO_ID = re.compile(r"^\w[\w-]*--(?!\.{1,2}$)[\w.-]+$")
@@ -27,6 +27,8 @@ class Job:
     chunks: int = 0
     truncated: bool = False
     error: str | None = None
+    embedded: int = 0  # vectors added so far; search works without them, and gets better as this grows
+    embed_total: int = 0
 
 
 def repo_id_from_url(url: str) -> str:
@@ -51,7 +53,8 @@ class IndexManager:
         self.protected, self.max_user_repos = protected, max_user_repos  # protected ids are never evicted
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
-        self._pool = ThreadPoolExecutor(max_workers=1)
+        self._pool = ThreadPoolExecutor(max_workers=1)  # download + chunk: quick, so a queue moves fast
+        self._embed_pool = ThreadPoolExecutor(max_workers=1)  # the embedding model: slow, in the background
 
     def repo_dir(self, rid: str) -> Path:
         if not REPO_ID.match(rid):
@@ -88,22 +91,32 @@ class IndexManager:
         return job
 
     def _run(self, job: Job) -> None:
-        def progress(phase: str, done: int, total: int) -> None:
-            job.status, job.done, job.total = phase, done, total
-
         try:
             job.status = "cloning"
             dest = self.repo_dir(job.id)
             dest.parent.mkdir(parents=True, exist_ok=True)
             self.clone_fn(job.url, dest)
+            job.status = "chunking"
             extra = {"max_chunks": self.max_chunks} if self.max_chunks else {}
-            summary = build_index(dest, self.db_path(job.id), self.embedder, progress, **extra)
-            job.chunks, job.truncated, job.status = summary.chunks, summary.truncated, "ready"
+            summary = build_text_index(dest, self.db_path(job.id), **extra)
+            job.chunks, job.truncated, job.embed_total = summary.chunks, summary.truncated, summary.chunks
+            job.status = "ready"  # questions work now (keyword and name search); vectors follow in the background
             self.prune()
+            self._embed_pool.submit(self._embed, job)
         except Exception as e:  # noqa: BLE001 - surface any failure to the caller, never crash the worker
             # Our own ValueErrors are written for the user; anything else keeps its type name for debugging.
             job.status, job.error = "error", str(e)[:200] if isinstance(e, ValueError) else f"{type(e).__name__}: {str(e)[:200]}"
             shutil.rmtree(self.repo_dir(job.id), ignore_errors=True)
+
+    def _embed(self, job: Job) -> None:
+        def progress(done: int, total: int) -> None:
+            job.embedded, job.embed_total = done, total
+
+        try:
+            embed_index(self.db_path(job.id), self.embedder, progress)
+            job.embedded = job.embed_total
+        except Exception:  # noqa: BLE001 - the repo was evicted mid-way, or the model failed: search stays keyword-only
+            job.embed_total = job.embedded = 0
 
     def touch(self, rid: str) -> None:
         """Mark a repo as recently used, so eviction removes the least recently used one."""

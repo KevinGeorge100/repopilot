@@ -39,8 +39,10 @@ fits Render's free 512 MB instance.
 - **Open mode.** Visitors can add any public GitHub repo. Safety limits: repos are trimmed to `REPOPILOT_MAX_CHUNKS`
   (1,500) pieces of code, one repo is indexed at a time, each visitor may add 4 per hour and everyone together
   `REPOPILOT_DAILY_INDEX_CAP` (40) per day. Downloads time out after 2 minutes and are refused above 200 MB. Symlinks in a
-  repo are never followed, so a hostile repo cannot make the server index its own files. Measured: a 162-chunk repo
-  indexed in about 15 seconds with the process peaking near 325 MB.
+  repo are never followed, so a hostile repo cannot make the server index its own files. A new repo is askable as soon as it is
+  downloaded and split (under 3 seconds locally, including a 1,500-chunk Flask); its vectors are computed in the
+  background (about 50 seconds for 1,500 chunks on 4 cores, much longer on Render's small free share of CPU), and search
+  uses keyword and name matching until they arrive. The process peaked near 350 MB.
 - **Model limits.** The free Gemini tier has a daily request quota per model and returns "high demand" errors at times.
   The page turns these into plain messages, and the example questions never depend on the model.
 
@@ -75,7 +77,7 @@ Set these in Render's **Environment** tab. Only `GEMINI_API_KEY` is required.
 - **Landing page shows a plain repo box and no repos.** The API did not find the seeded data. Check that the build log
   shows the three `chunks in ...s` lines from `repopilot seed`, and that `REPOPILOT_WORKDIR` was not overridden.
 - **"Live questions are unavailable".** No model is configured (check `GEMINI_API_KEY`), or today's cap is used up.
-- **Out of memory.** Not seen at 512 MB in testing (peak about 325 MB while indexing a small repo), but if you raise
+- **Out of memory.** Not seen at 512 MB in testing (peak about 350 MB while indexing a 1,500-chunk repo), but if you raise
   `REPOPILOT_MAX_CHUNKS` a lot, move to a larger plan.
 
 ## Honest notes on testing

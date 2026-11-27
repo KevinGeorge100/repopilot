@@ -24,8 +24,7 @@ function toUrl(input: string): string | null {
 function phaseText(r: RepoStatus): string {
   if (r.status === "queued") return "Waiting for another repository to finish. You are next in line.";
   if (r.status === "cloning") return "Downloading the repository";
-  if (r.status === "chunking") return "Splitting source files into functions and classes";
-  if (r.status === "embedding") return `Indexing code: ${r.done} of ${r.total} pieces`;
+  if (r.status === "chunking") return "Reading the code";
   return "";
 }
 
@@ -49,14 +48,16 @@ export default function Home() {
 
   // Poll indexing progress.
   useEffect(() => {
-    if (!repo || repo.status === "ready" || repo.status === "error") return;
+    if (!repo || repo.status === "error") return;
+    const searching = repo.status === "ready" && (repo.embed_total ?? 0) > (repo.embedded ?? 0);
+    if (repo.status === "ready" && !searching) return;
     const t = setTimeout(async () => {
       try {
         setRepo(await getRepo(repo.id));
       } catch (e) {
         setRepo({ ...repo, status: "error", error: (e as Error).message });
       }
-    }, 1200);
+    }, searching ? 2500 : 700);
     return () => clearTimeout(t);
   }, [repo]);
 
@@ -163,7 +164,7 @@ export default function Home() {
                 style={pct === null ? undefined : { width: `${pct}%` }}
               />
             </div>
-            <p className="mt-3 text-sm text-graphite">Most projects take under a minute. Bigger ones can take a few minutes.</p>
+            <p className="mt-3 text-sm text-graphite">Usually a few seconds.</p>
           </div>
         )}
       </main>
@@ -191,6 +192,12 @@ export default function Home() {
         </header>
 
         <div className="flex-1 px-4 pb-6 sm:px-8">
+          {(repo.embed_total ?? 0) > (repo.embedded ?? 0) && (
+            <p className="mb-4 max-w-[68ch] text-sm text-graphite" role="status">
+              You can ask now. Search is still getting smarter in the background (
+              {Math.round(((repo.embedded ?? 0) / (repo.embed_total ?? 1)) * 100)}%), so the first answers may miss a detail.
+            </p>
+          )}
           {repo.truncated && (
             <p className="mb-4 max-w-[68ch] text-sm text-graphite">
               This repo is large, so only the {repo.chunks.toLocaleString()} most relevant pieces of code were indexed. Docs and changelogs were

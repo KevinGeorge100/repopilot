@@ -19,6 +19,35 @@ class IndexSummary:
     truncated: bool
 
 
+def build_text_index(root: Path, db: Path, max_chunks: int = MAX_CHUNKS) -> IndexSummary:
+    """Chunk a repo and store it for keyword and name search. Takes a second or two; questions can be asked at once."""
+    chunks = chunk_repo(root)
+    found = len(chunks)
+    if found > max_chunks:  # keep source code first; stable sort preserves file order
+        chunks = sorted(chunks, key=lambda c: -path_prior(c.path))[:max_chunks]
+    db.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ("", "-wal", "-shm"):
+        Path(str(db) + suffix).unlink(missing_ok=True)
+    store = Store(db)
+    store.add_text(chunks)
+    store.db.close()
+    return IndexSummary(len(chunks), found, found > len(chunks))
+
+
+def embed_index(
+    db: Path,
+    embedder: Embedder,
+    progress: Callable[[int, int], None] | None = None,
+    embed_chars: int = EMBED_CHARS,
+) -> None:
+    """Add vectors to an index built by build_text_index (slow: runs the embedding model)."""
+    store = Store(db)
+    try:
+        store.embed_pending(embedder, progress, embed_chars)
+    finally:
+        store.db.close()
+
+
 def build_index(
     root: Path,
     db: Path,
@@ -27,18 +56,9 @@ def build_index(
     max_chunks: int = MAX_CHUNKS,
     embed_chars: int = EMBED_CHARS,
 ) -> IndexSummary:
-    def report(phase: str, done: int = 0, total: int = 0) -> None:
-        if progress:
-            progress(phase, done, total)
-
-    report("chunking")
-    chunks = chunk_repo(root)
-    found = len(chunks)
-    if found > max_chunks:  # keep source code first; stable sort preserves file order
-        chunks = sorted(chunks, key=lambda c: -path_prior(c.path))[:max_chunks]
-    db.parent.mkdir(parents=True, exist_ok=True)
-    db.unlink(missing_ok=True)
-    store = Store(db)
-    store.add(chunks, embedder, progress=lambda d, t: report("embedding", d, t), embed_chars=embed_chars)
-    store.db.close()
-    return IndexSummary(len(chunks), found, found > len(chunks))
+    """Both steps in one call (CLI, evaluation, demo seeding)."""
+    if progress:
+        progress("chunking", 0, 0)
+    summary = build_text_index(root, db, max_chunks)
+    embed_index(db, embedder, lambda d, t: progress and progress("embedding", d, t), embed_chars)
+    return summary
