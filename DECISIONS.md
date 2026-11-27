@@ -98,3 +98,13 @@ A user pasting a repo waited about a minute: the embedding model was the cost, a
 - Measured through the real server: markupsafe ready in 0.8 s, Flask (trimmed to 1,500 chunks) in 2.4 s, vectors complete in about 50 s, peak process memory about 350 MB.
 - Not measured: the same on the real Render instance.
 
+## 37. UX: design system, accessibility and the waiting experience (Day 7)
+Why: a first-time visitor did not understand what the project was for, and waited on a dead progress screen.
+- **Design system** (`web/DESIGN.md`, `/styleguide/`): colour tokens in a light and a dark set, fluid type scale, 4px grid, motion tokens, shared components. One rule worth keeping: yellow means evidence, green means a check passed, never decoration.
+- **Contrast is a build check**, not a promise: `npm run a11y:contrast` runs in CI and fails on any text pair under 4.5:1 (3:1 for borders and focus rings) in either theme. It passed on the first draft palette; the real finds came from axe-core.
+- **axe-core scans** (WCAG A/AA 2.0-2.2 plus best practices) of the landing page, style guide, and the waiting, ready and answer states of the app, on laptop and phone, light and dark. They found real issues which are fixed: a scrollable code window that keyboards could not reach, a missing level-one heading on the answer screen, and a green pill just under the contrast minimum. Final: 0 violations. axe finds roughly a third to half of accessibility problems; it does not replace testing with a screen reader, which I have not done.
+- **Waiting experience** (the repo may take longer than 10 seconds on a free server, so it has to be worth waiting for): the app opens at once; a stepper shows where the repo is, with a running clock and honest wording once it passes 20 seconds; there is something to read meanwhile; and the visitor can click or type a question straight away, which is queued and sent automatically the moment the repo is ready.
+- **Layout:** laptop is three columns (repo and starters, conversation, evidence); phone is one column with the evidence as a slide-up sheet (Escape and a tap outside close it) and the ask bar fixed at the bottom with safe-area padding. 44px minimum touch targets. Verified at 1440, 820 and 390px with no horizontal scrolling.
+- **Bugs the browser tests caught, not the type checker:** an autoplaying answer scrolled the whole page; long code lines widened a phone layout; two display classes on one button (`hidden` and `inline-flex`) showed a button meant to be hidden.
+- **Not done:** no usability test with real people (the strongest evidence for UX decisions), no screen-reader pass, no measurement of whether the waiting changes help on the real Render server.
+

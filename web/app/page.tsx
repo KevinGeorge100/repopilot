@@ -1,9 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnswerView } from "@/components/AnswerView";
+import { Button } from "@/components/ui/Button";
 import { ReadingTips } from "@/components/Guide";
+import { AppHeader, Composer, CopyButton, EvidenceSheet, ProgressCard, repoName, sharpening } from "@/components/app/AppParts";
 import { EvidencePanel } from "@/components/EvidencePanel";
-import { Landing, SOURCE_URL } from "@/components/Landing";
+import { Landing } from "@/components/Landing";
 import { Trail } from "@/components/Trail";
 import { friendlyError } from "@/lib/errors";
 import { ask, getConfig, getRepo, startIndex } from "@/lib/api";
@@ -11,6 +13,7 @@ import type { Citation, Config, RepoStatus, Turn } from "@/lib/types";
 import { citeKey } from "@/lib/types";
 
 const STARTERS = [
+  "What does this project do, in plain English?",
   "Give me a tour of how this project is organised.",
   "Where does execution start, and what happens next?",
   "How does this project handle errors?",
@@ -19,13 +22,6 @@ const STARTERS = [
 function toUrl(input: string): string | null {
   const s = input.trim().replace(/^https?:\/\//, "").replace(/^github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
   return /^[\w.-]+\/[\w.-]+$/.test(s) ? `https://github.com/${s}` : null;
-}
-
-function phaseText(r: RepoStatus): string {
-  if (r.status === "queued") return "Waiting for another repository to finish. You are next in line.";
-  if (r.status === "cloning") return "Downloading the repository";
-  if (r.status === "chunking") return "Reading the code";
-  return "";
 }
 
 export default function Home() {
@@ -83,39 +79,47 @@ export default function Home() {
     }
   }, []);
 
+  const runTurn = useCallback(async (id: number, q: string, repoId: string) => {
+    const patch = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t) => (t.id === id ? fn(t) : t)));
+    patch((t) => ({ ...t, status: "working" }));
+    abort.current = new AbortController();
+    try {
+      await ask(
+        repoId,
+        q,
+        {
+          onToolCall: (name, inp) => patch((t) => ({ ...t, steps: [...t.steps, { name, input: inp, done: false, failed: false }] })),
+          onToolResult: (_n, error) =>
+            patch((t) => ({ ...t, steps: t.steps.map((s, i) => (i === t.steps.length - 1 ? { ...s, done: true, failed: error } : s)) })),
+          onRepair: () => patch((t) => ({ ...t, repairing: true })),
+          onAnswer: (a) => patch((t) => ({ ...t, answer: a, status: "done", repairing: false })),
+          onError: (m) => patch((t) => ({ ...t, status: "error", error: friendlyError(m) })),
+        },
+        abort.current.signal,
+      );
+      patch((t) => (t.status === "working" ? { ...t, status: "error", error: "The connection closed before an answer arrived." } : t));
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") patch((t) => ({ ...t, status: "error", error: friendlyError((e as Error).message) }));
+    }
+  }, []);
+
+  // A question asked before the repo is ready is queued, then sent automatically the moment it is.
   const send = useCallback(
-    async (q: string) => {
-      if (!repo || !q.trim() || busy) return;
+    (q: string) => {
+      if (!repo || q.trim().length < 3) return;
       const id = Date.now();
       setQuestion("");
-      setTurns((ts) => [...ts, { id, question: q.trim(), steps: [], repairing: false, status: "working" }]);
-      const patch = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t) => (t.id === id ? fn(t) : t)));
-      abort.current = new AbortController();
-      try {
-        await ask(
-          repo.id,
-          q.trim(),
-          {
-            onToolCall: (name, inp) =>
-              patch((t) => ({ ...t, steps: [...t.steps, { name, input: inp, done: false, failed: false }] })),
-            onToolResult: (_n, error) =>
-              patch((t) => ({
-                ...t,
-                steps: t.steps.map((s, i) => (i === t.steps.length - 1 ? { ...s, done: true, failed: error } : s)),
-              })),
-            onRepair: () => patch((t) => ({ ...t, repairing: true })),
-            onAnswer: (a) => patch((t) => ({ ...t, answer: a, status: "done", repairing: false })),
-            onError: (m) => patch((t) => ({ ...t, status: "error", error: friendlyError(m) })),
-          },
-          abort.current.signal,
-        );
-        patch((t) => (t.status === "working" ? { ...t, status: "error", error: "The connection closed before an answer arrived." } : t));
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") patch((t) => ({ ...t, status: "error", error: friendlyError((e as Error).message) }));
-      }
+      setTurns((ts) => [...ts, { id, question: q.trim(), steps: [], repairing: false, status: repo.status === "ready" ? "working" : "queued" }]);
+      if (repo.status === "ready") runTurn(id, q.trim(), repo.id);
     },
-    [repo, busy],
+    [repo, runTurn],
   );
+
+  useEffect(() => {
+    if (repo?.status !== "ready" || turns.some((t) => t.status === "working")) return;
+    const next = turns.find((t) => t.status === "queued");
+    if (next) runTurn(next.id, next.question, repo.id);
+  }, [repo, turns, runTurn]);
 
   const reset = () => {
     abort.current?.abort();
@@ -139,171 +143,133 @@ export default function Home() {
     return <Landing config={config} input={input} setInput={setInput} formError={formError} onOpen={open} />;
   }
 
-  // ---- Indexing / error ----
-  if (repo.status !== "ready") {
-    const failed = repo.status === "error";
-    const pct = repo.status === "embedding" && repo.total ? Math.round((repo.done / repo.total) * 100) : null;
-    return (
-      <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4 sm:px-6">
-        <p className="mb-8 text-xl font-bold tracking-tight">RepoPilot</p>
-        <h1 className="font-mono text-lg font-medium">{repo.id.replace("--", "/")}</h1>
-        {failed ? (
-          <div role="alert" className="mt-4">
-            <p className="text-alert">Couldn’t open this repository.</p>
-            <p className="mt-1 text-graphite">{repo.error ?? "Something went wrong."} Check the name is a public repo and try again.</p>
-            <button onClick={reset} className="mt-5 rounded-md bg-ink px-5 py-2.5 font-semibold text-sheet">
-              Choose another repo
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4" role="status" aria-live="polite">
-            <p className="text-graphite">{phaseText(repo)}</p>
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-rule">
-              <div
-                className={`h-full rounded-full bg-cobalt transition-all duration-500 ${pct === null ? "w-1/4 animate-pulse" : ""}`}
-                style={pct === null ? undefined : { width: `${pct}%` }}
-              />
-            </div>
-            <p className="mt-3 text-sm text-graphite">Usually a few seconds.</p>
-          </div>
-        )}
-      </main>
-    );
-  }
+  const ready = repo.status === "ready";
+  const failed = repo.status === "error";
+  const pct = sharpening(repo);
+  const starters = examples.length > 0 ? examples : STARTERS;
 
-  // ---- Chat + evidence ----
   return (
-    <div className="lg:grid lg:min-h-screen lg:grid-cols-[minmax(0,1fr)_34rem]">
-      <main className="flex min-h-screen min-w-0 flex-col">
-        <header className="flex items-center justify-between gap-4 px-4 py-4 sm:px-8">
-          <p className="text-lg font-bold tracking-tight">RepoPilot</p>
-          <div className="flex min-w-0 items-center gap-3 text-sm">
-            <span className="truncate font-mono">{repo.id.replace("--", "/")}</span>
-            <button onClick={() => setShowTips((v) => !v)} className="shrink-0 text-graphite underline underline-offset-4">
-              Help
-            </button>
-            <button onClick={reset} className="shrink-0 text-cobalt-ink underline underline-offset-4">
-              Change repo
-            </button>
-            <a href={SOURCE_URL} className="hidden shrink-0 text-graphite underline underline-offset-4 sm:inline">
-              Source
-            </a>
-          </div>
-        </header>
-
-        <div className="flex-1 px-4 pb-6 sm:px-8">
-          {(repo.embed_total ?? 0) > (repo.embedded ?? 0) && (
-            <p className="mb-4 max-w-[68ch] text-sm text-graphite" role="status">
-              You can ask now. Search is still getting smarter in the background (
-              {Math.round(((repo.embedded ?? 0) / (repo.embed_total ?? 1)) * 100)}%), so the first answers may miss a detail.
-            </p>
-          )}
-          {repo.truncated && (
-            <p className="mb-4 max-w-[68ch] text-sm text-graphite">
-              This repo is large, so only the {repo.chunks.toLocaleString()} most relevant pieces of code were indexed. Docs and changelogs were
-              dropped first.
-            </p>
-          )}
-          {(turns.length > 0 || showTips) && <ReadingTips forceOpen={showTips} onDismiss={() => setShowTips(false)} />}
-          {turns.length === 0 && (
-            <div className="max-w-[68ch] pt-8">
-              <h1 className="text-3xl font-bold tracking-tight">What do you want to know?</h1>
-              {examples.length > 0 && (
-                <p className="mt-3 text-graphite">
-                  These example questions load instantly: their answers are real results saved from an evaluation run.
-                  Anything you type is answered live.
-                </p>
-              )}
-              <ul className="mt-5 flex flex-col items-start gap-2">
-                {(examples.length > 0 ? examples : STARTERS).map((q) => (
+    <>
+      <AppHeader repo={repo} onHelp={() => setShowTips((v) => !v)} onReset={reset} />
+      <div className="mx-auto grid max-w-[110rem] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] xl:grid-cols-[15rem_minmax(0,1fr)_minmax(0,36rem)]">
+        <nav aria-label="This repository" className="hidden border-r border-line px-5 py-8 xl:block">
+          <div className="sticky top-24 space-y-6 text-sm">
+            <div>
+              <p className="font-mono text-sm font-semibold">{repoName(repo.id)}</p>
+              <p className="mt-1 text-muted">{ready ? `${repo.chunks.toLocaleString()} pieces of code indexed` : "Getting ready…"}</p>
+              {pct !== null && <p className="mt-1 text-muted">Search sharpening: {pct}%</p>}
+            </div>
+            <div>
+              <p className="font-semibold">Try asking</p>
+              <ul className="mt-2 space-y-1">
+                {starters.slice(0, 4).map((q) => (
                   <li key={q}>
-                    <button
-                      onClick={() => send(q)}
-                      className="text-left font-serif text-lg text-cobalt-ink underline decoration-rule underline-offset-4 hover:decoration-cobalt"
-                    >
+                    <button onClick={() => send(q)} disabled={busy} className="press w-full rounded-md px-2 py-2 text-left text-link hover:bg-surface-2 disabled:text-muted">
                       {q}
                     </button>
                   </li>
                 ))}
               </ul>
             </div>
-          )}
-          {turns.map((t) => (
-            <section key={t.id} className="mb-10 max-w-[68ch]" aria-label={t.question}>
-              <h2 className="mt-8 text-xl font-semibold leading-snug tracking-tight">{t.question}</h2>
-              <Trail steps={t.steps} working={t.status === "working"} repairing={t.repairing} />
-              {t.status === "error" && (
-                <p role="alert" className="text-alert">
-                  {t.error}
-                </p>
-              )}
-              {t.answer && (
-                <AnswerView
-                  payload={t.answer}
-                  active={active?.turn === t.id ? active.cite : null}
-                  onOpen={(c) => {
-                    setActive({ turn: t.id, cite: c });
-                    setPanelOpen(true);
-                  }}
-                />
-              )}
-            </section>
-          ))}
-          <div ref={endRef} />
-        </div>
-
-        <form
-          className="sticky bottom-0 border-t border-rule bg-paper/95 px-4 py-3 backdrop-blur sm:px-8"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send(question);
-          }}
-        >
-          {liveOff && (
-            <p className="mb-2 max-w-[68ch] text-sm text-graphite">
-              Live questions are unavailable right now (no model is configured or today’s limit was reached). The
-              example questions still work.
-            </p>
-          )}
-          <div className="flex max-w-[68ch] gap-2">
-            <label className="sr-only" htmlFor="q">
-              Your question
-            </label>
-            <input
-              id="q"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder={liveOff ? "Live questions are unavailable" : "Ask your own question about this code"}
-              disabled={liveOff}
-              maxLength={1000}
-              autoComplete="off"
-              className="min-w-0 flex-1 rounded-md border border-rule bg-sheet px-4 py-2.5 outline-none focus:border-cobalt"
-            />
-            <button
-              type="submit"
-              disabled={busy || liveOff || question.trim().length < 3}
-              className="rounded-md bg-ink px-5 py-2.5 font-semibold text-sheet transition hover:bg-cobalt-ink disabled:bg-rule disabled:text-graphite"
-            >
-              {busy ? "Working" : "Ask"}
-            </button>
           </div>
-        </form>
-      </main>
+        </nav>
 
-      <aside
-        aria-label="Source code evidence"
-        className={`border-rule bg-sheet lg:sticky lg:top-0 lg:block lg:h-screen lg:border-l ${
-          panelOpen ? "fixed inset-0 z-20 block" : "hidden"
-        }`}
-      >
-        <EvidencePanel
-          repo={repo.id}
-          sources={sources}
-          active={active?.cite ?? null}
-          onSelect={(c) => active && setActive({ turn: active.turn, cite: c })}
-          onClose={() => setPanelOpen(false)}
-        />
-      </aside>
-    </div>
+        <main id="main" className="flex min-h-[calc(100dvh-4rem)] min-w-0 flex-col">
+          <div className="flex-1 px-4 pb-8 pt-6 sm:px-6 sm:pt-8">
+            {failed && (
+              <section role="alert" className="card max-w-[44rem] p-6">
+                <h2 className="t-h3">Couldn’t open {repoName(repo.id)}</h2>
+                <p className="mt-2 text-muted">{repo.error ?? "Something went wrong."}</p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Button onClick={reset}>Choose another repo</Button>
+                </div>
+              </section>
+            )}
+            {!failed && !ready && <ProgressCard repo={repo} />}
+            {(turns.length > 0 || showTips) && <ReadingTips forceOpen={showTips} onDismiss={() => setShowTips(false)} />}
+            {!failed && repo.truncated && ready && (
+              <p className="t-small mb-4 max-w-[68ch] text-muted">
+                This repo is large, so only the {repo.chunks.toLocaleString()} most relevant pieces of code were indexed. Docs and changelogs were dropped first.
+              </p>
+            )}
+            {!failed && turns.length === 0 && (
+              <div className={`max-w-[68ch] ${ready ? "" : "mt-8"}`}>
+                <h1 className="t-h2">{ready ? "What do you want to know?" : "While it loads, pick a question"}</h1>
+                <p className="mt-2 text-muted">
+                  {!ready
+                    ? "Click one and it will be asked the moment the repo is ready."
+                    : examples.length > 0
+                      ? "These examples load instantly: their answers are real results saved from a test run. Anything you type is answered live."
+                      : "Click one, or type your own below."}
+                </p>
+                <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+                  {starters.map((q, i) => (
+                    <li key={q} className="rise" style={{ "--d": i } as React.CSSProperties}>
+                      <button
+                        onClick={() => send(q)}
+                        className="card press lift w-full px-4 py-3 text-left font-serif text-[1.05rem] leading-snug text-link"
+                      >
+                        {q}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {turns.length > 0 && <h1 className="sr-only">Questions about {repoName(repo.id)}</h1>}
+            {turns.map((t) => (
+              <section key={t.id} className="mb-10 max-w-[68ch]" aria-label={t.question}>
+                <h2 className="rise mt-8 text-xl font-semibold leading-snug tracking-tight">{t.question}</h2>
+                {t.status === "queued" && (
+                  <div role="status" className="mt-3">
+                    <p className="text-muted">Queued. I’ll ask this as soon as the repo is ready.</p>
+                    <div className="skeleton mt-3 h-3.5 w-3/4" aria-hidden />
+                  </div>
+                )}
+                <Trail steps={t.steps} working={t.status === "working"} repairing={t.repairing} />
+                {t.status === "working" && t.steps.length === 0 && (
+                  <div className="mt-2 space-y-2.5" aria-hidden>
+                    <div className="skeleton h-3.5 w-[90%]" />
+                    <div className="skeleton h-3.5 w-[70%]" />
+                  </div>
+                )}
+                {t.status === "error" && (
+                  <p role="alert" className="text-alert">
+                    {t.error}
+                  </p>
+                )}
+                {t.answer && (
+                  <div className="rise">
+                    <AnswerView
+                      payload={t.answer}
+                      active={active?.turn === t.id ? active.cite : null}
+                      onOpen={(c) => {
+                        setActive({ turn: t.id, cite: c });
+                        setPanelOpen(true);
+                      }}
+                    />
+                    <div className="mt-1 -ml-3">
+                      <CopyButton text={t.answer.answer} />
+                    </div>
+                  </div>
+                )}
+              </section>
+            ))}
+            <div ref={endRef} />
+          </div>
+          <Composer value={question} onChange={setQuestion} onSend={send} busy={busy} ready={ready} liveOff={liveOff && ready} />
+        </main>
+
+        <EvidenceSheet open={panelOpen} onClose={() => setPanelOpen(false)}>
+          <EvidencePanel
+            repo={repo.id}
+            sources={sources}
+            active={active?.cite ?? null}
+            onSelect={(c) => active && setActive({ turn: active.turn, cite: c })}
+            onClose={() => setPanelOpen(false)}
+          />
+        </EvidenceSheet>
+      </div>
+    </>
   );
 }
