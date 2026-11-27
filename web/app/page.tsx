@@ -2,17 +2,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnswerView } from "@/components/AnswerView";
 import { EvidencePanel } from "@/components/EvidencePanel";
+import { Landing, SOURCE_URL } from "@/components/Landing";
 import { Trail } from "@/components/Trail";
-import { ask, getRepo, startIndex } from "@/lib/api";
-import type { Citation, RepoStatus, Turn } from "@/lib/types";
+import { ask, getConfig, getRepo, startIndex } from "@/lib/api";
+import type { Citation, Config, RepoStatus, Turn } from "@/lib/types";
 import { citeKey } from "@/lib/types";
 
-const EXAMPLES = ["pallets/itsdangerous", "pallets/click"];
 const STARTERS = [
   "Give me a tour of how this project is organised.",
   "Where does execution start, and what happens next?",
   "How does this project handle errors?",
 ];
+
+/** Turn provider and limit errors into something a visitor can act on. */
+function friendlyError(message: string): string {
+  if (/daily limit|429|quota|too many/i.test(message))
+    return "Live questions are paused: the free model quota or today’s limit for this demo is used up. The example questions still work.";
+  if (/503|502|unavailable|high demand|unreachable|timed? ?out/i.test(message))
+    return "The model is busy right now. Try again in a minute, or use one of the example questions.";
+  if (/not configured/i.test(message)) return "Live questions are not set up on this deployment. The example questions still work.";
+  return message;
+}
 
 function toUrl(input: string): string | null {
   const s = input.trim().replace(/^https?:\/\//, "").replace(/^github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
@@ -34,9 +44,14 @@ export default function Home() {
   const [question, setQuestion] = useState("");
   const [active, setActive] = useState<{ turn: number; cite: Citation } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [config, setConfig] = useState<Config | null>(null);
   const abort = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const busy = turns.some((t) => t.status === "working");
+
+  useEffect(() => {
+    getConfig().then(setConfig);
+  }, []);
 
   // Poll indexing progress.
   useEffect(() => {
@@ -95,13 +110,13 @@ export default function Home() {
               })),
             onRepair: () => patch((t) => ({ ...t, repairing: true })),
             onAnswer: (a) => patch((t) => ({ ...t, answer: a, status: "done", repairing: false })),
-            onError: (m) => patch((t) => ({ ...t, status: "error", error: m })),
+            onError: (m) => patch((t) => ({ ...t, status: "error", error: friendlyError(m) })),
           },
           abort.current.signal,
         );
         patch((t) => (t.status === "working" ? { ...t, status: "error", error: "The connection closed before an answer arrived." } : t));
       } catch (e) {
-        if ((e as Error).name !== "AbortError") patch((t) => ({ ...t, status: "error", error: (e as Error).message }));
+        if ((e as Error).name !== "AbortError") patch((t) => ({ ...t, status: "error", error: friendlyError((e as Error).message) }));
       }
     },
     [repo, busy],
@@ -115,6 +130,9 @@ export default function Home() {
     setPanelOpen(false);
   };
 
+  const examples = config?.repos.find((r) => r.id === repo?.id)?.examples ?? [];
+  const liveOff = config !== null && (!config.live_questions || config.daily_remaining === 0);
+
   const sources: Citation[] = (() => {
     const t = turns.find((x) => x.id === active?.turn);
     const seen = new Set<string>();
@@ -123,64 +141,7 @@ export default function Home() {
 
   // ---- Landing ----
   if (!repo) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-4 py-16 sm:px-6">
-        <p className="mb-10 text-xl font-bold tracking-tight">RepoPilot</p>
-        <h1 className="max-w-[18ch] text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
-          Ask a repo anything. See the lines behind every answer.
-        </h1>
-        <p className="mt-5 max-w-[52ch] font-serif text-xl leading-relaxed text-graphite">
-          Paste a public GitHub repository. RepoPilot reads the code, answers your question, and checks that every
-          citation points to real lines it actually read.
-        </p>
-        <form
-          className="mt-9 flex flex-col gap-3 sm:flex-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            open(input);
-          }}
-        >
-          <label className="sr-only" htmlFor="repo">
-            GitHub repository
-          </label>
-          <input
-            id="repo"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="github.com/owner/repo"
-            autoComplete="off"
-            spellCheck={false}
-            className="min-w-0 flex-1 rounded-md border border-rule bg-sheet px-4 py-3 font-mono text-sm outline-none focus:border-cobalt"
-          />
-          <button
-            type="submit"
-            className="rounded-md bg-ink px-6 py-3 font-semibold text-sheet transition hover:bg-cobalt-ink"
-          >
-            Open repo
-          </button>
-        </form>
-        {formError && (
-          <p role="alert" className="mt-3 text-alert">
-            {formError}
-          </p>
-        )}
-        <p className="mt-6 text-graphite">
-          Try{" "}
-          {EXAMPLES.map((ex, i) => (
-            <span key={ex}>
-              {i > 0 && " or "}
-              <button type="button" onClick={() => open(ex)} className="font-mono text-sm text-cobalt-ink underline underline-offset-4">
-                {ex}
-              </button>
-            </span>
-          ))}
-        </p>
-        <p className="mt-16 max-w-[58ch] text-sm text-graphite">
-          Public repositories only. Code snippets are sent to an AI provider to write each answer, so don’t open
-          anything private.
-        </p>
-      </main>
-    );
+    return <Landing config={config} input={input} setInput={setInput} formError={formError} onOpen={open} />;
   }
 
   // ---- Indexing / error ----
@@ -226,6 +187,9 @@ export default function Home() {
             <button onClick={reset} className="shrink-0 text-cobalt-ink underline underline-offset-4">
               Change repo
             </button>
+            <a href={SOURCE_URL} className="hidden shrink-0 text-graphite underline underline-offset-4 sm:inline">
+              Source
+            </a>
           </div>
         </header>
 
@@ -239,11 +203,20 @@ export default function Home() {
           {turns.length === 0 && (
             <div className="max-w-[68ch] pt-8">
               <h1 className="text-3xl font-bold tracking-tight">What do you want to know?</h1>
+              {examples.length > 0 && (
+                <p className="mt-3 text-graphite">
+                  These example questions load instantly: their answers are real results saved from an evaluation run.
+                  Anything you type is answered live.
+                </p>
+              )}
               <ul className="mt-5 flex flex-col items-start gap-2">
-                {STARTERS.map((s) => (
-                  <li key={s}>
-                    <button onClick={() => send(s)} className="text-left font-serif text-lg text-cobalt-ink underline decoration-rule underline-offset-4 hover:decoration-cobalt">
-                      {s}
+                {(examples.length > 0 ? examples : STARTERS).map((q) => (
+                  <li key={q}>
+                    <button
+                      onClick={() => send(q)}
+                      className="text-left font-serif text-lg text-cobalt-ink underline decoration-rule underline-offset-4 hover:decoration-cobalt"
+                    >
+                      {q}
                     </button>
                   </li>
                 ))}
@@ -256,7 +229,7 @@ export default function Home() {
               <Trail steps={t.steps} working={t.status === "working"} repairing={t.repairing} />
               {t.status === "error" && (
                 <p role="alert" className="text-alert">
-                  {t.error} <span className="text-graphite">Ask again in a moment.</span>
+                  {t.error}
                 </p>
               )}
               {t.answer && (
@@ -281,6 +254,12 @@ export default function Home() {
             send(question);
           }}
         >
+          {liveOff && (
+            <p className="mb-2 max-w-[68ch] text-sm text-graphite">
+              Live questions are unavailable right now (no model is configured or today’s limit was reached). The
+              example questions still work.
+            </p>
+          )}
           <div className="flex max-w-[68ch] gap-2">
             <label className="sr-only" htmlFor="q">
               Your question
@@ -289,14 +268,15 @@ export default function Home() {
               id="q"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask about this code"
+              placeholder={liveOff ? "Live questions are unavailable" : "Ask your own question about this code"}
+              disabled={liveOff}
               maxLength={1000}
               autoComplete="off"
               className="min-w-0 flex-1 rounded-md border border-rule bg-sheet px-4 py-2.5 outline-none focus:border-cobalt"
             />
             <button
               type="submit"
-              disabled={busy || question.trim().length < 3}
+              disabled={busy || liveOff || question.trim().length < 3}
               className="rounded-md bg-ink px-5 py-2.5 font-semibold text-sheet transition hover:bg-cobalt-ink disabled:bg-rule disabled:text-graphite"
             >
               {busy ? "Working" : "Ask"}

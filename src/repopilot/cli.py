@@ -146,6 +146,45 @@ def mcp(workdir: Path = WORKDIR) -> None:
 
 
 @app.command()
+def seed(
+    manifest: Path = Path("demo/manifest.json"),
+    workdir: Path = WORKDIR,
+    force: bool = False,
+    max_chunks: int | None = None,
+) -> None:
+    """Clone and index the demo repos at their pinned commits (run at image build time, so serving needs no CPU for it)."""
+    from .demo import load_manifest, seed_demo
+
+    seed_demo(load_manifest(manifest), workdir, FastEmbedder(), typer.echo, force, max_chunks=max_chunks)
+
+
+@app.command("demo-export")
+def demo_export(
+    run_dir: Path,
+    manifest: Path = Path("demo/manifest.json"),
+    dataset: Path = EVAL_DATASET,
+    out: Path = Path("demo/answers.json"),
+    per_repo: int = 6,
+    exclude: str = "",
+) -> None:
+    """Write real, passing answers from an evaluation run as the demo's cached examples (copied verbatim)."""
+    import json
+
+    from .demo import export_answers, load_manifest
+    from .evals.runner import read_traces
+
+    traces = read_traces(run_dir / "traces.jsonl")
+    cfg_path = run_dir / "config.json"
+    cfg = json.loads(cfg_path.read_text()).get("config", {}) if cfg_path.exists() else {}
+    source = {"run": cfg.get("label", run_dir.name), "model": cfg.get("model"), "provider": cfg.get("provider")}
+    skip = {i.strip() for i in exclude.split(",") if i.strip()}
+    answers = export_answers(_load_eval_dataset(dataset), traces, load_manifest(manifest), per_repo, source, skip)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"answers": answers}, ensure_ascii=False, indent=1) + "\n")
+    typer.echo(f"wrote {len(answers)} cached answers to {out}")
+
+
+@app.command()
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the API server (SSE streaming)."""
     import logging

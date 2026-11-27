@@ -38,9 +38,14 @@ class IndexManager:
     """Owns clone and index locations plus the job table. One index runs at a time (CPU-bound)."""
 
     def __init__(
-        self, workdir: Path, embedder: Embedder, clone_fn: Callable[[str, Path], Path] = clone
+        self,
+        workdir: Path,
+        embedder: Embedder,
+        clone_fn: Callable[[str, Path], Path] = clone,
+        max_chunks: int | None = None,
     ) -> None:
         self.workdir, self.embedder, self.clone_fn = workdir, embedder, clone_fn
+        self.max_chunks = max_chunks  # None means the pipeline default; a small host can lower it
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=1)
@@ -88,7 +93,8 @@ class IndexManager:
             dest = self.repo_dir(job.id)
             dest.parent.mkdir(parents=True, exist_ok=True)
             self.clone_fn(job.url, dest)
-            summary = build_index(dest, self.db_path(job.id), self.embedder, progress)
+            extra = {"max_chunks": self.max_chunks} if self.max_chunks else {}
+            summary = build_index(dest, self.db_path(job.id), self.embedder, progress, **extra)
             job.chunks, job.truncated, job.status = summary.chunks, summary.truncated, "ready"
         except Exception as e:  # noqa: BLE001 - surface any failure to the caller, never crash the worker
             job.status, job.error = "error", f"{type(e).__name__}: {str(e)[:200]}"

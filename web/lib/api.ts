@@ -1,4 +1,4 @@
-import type { AnswerPayload, RepoStatus } from "./types";
+import type { AnswerPayload, Config, RepoStatus } from "./types";
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -10,6 +10,15 @@ async function fail(r: Response): Promise<never> {
     else if (Array.isArray(j.detail)) msg = "Check the input and try again.";
   } catch {}
   throw new Error(msg);
+}
+
+export async function getConfig(): Promise<Config | null> {
+  try {
+    const r = await fetch(`${API}/api/config`);
+    return r.ok ? r.json() : null;
+  } catch {
+    return null; // an older or unreachable API: fall back to the plain "paste a repo" screen
+  }
 }
 
 export async function startIndex(url: string): Promise<RepoStatus> {
