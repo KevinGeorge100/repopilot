@@ -53,7 +53,7 @@ export function Landing({ config, input, setInput, formError, onOpen }: Props) {
             </button>
           </form>
           <p className="mt-2 text-sm text-graphite">
-            Takes under a minute for most projects. Very large repos are trimmed to their{" "}
+            Ready to ask in a few seconds. Very large repos are trimmed to their{" "}
             {(config?.max_chunks ?? 2500).toLocaleString()} most relevant pieces of code. Or try one of the ready-made
             projects below.
           </p>

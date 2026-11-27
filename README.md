@@ -26,8 +26,8 @@ struck through and explained, never silently shown.
 **Live demo: <https://repopilot-wekf.onrender.com>**. Paste any public GitHub link and ask about it, or start with one
 of three ready-made projects whose example questions are real answers saved from an evaluation run (labelled as such).
 Anything you type is answered live by the model, up to a daily cap. It runs on Render's free plan, so the first visit
-after a quiet spell waits tens of seconds for the service to wake, and new repos are indexed in under a minute for most
-projects. To host your own copy, see [DEPLOY.md](DEPLOY.md).
+after a quiet spell waits tens of seconds for the service to wake, and a new repo is ready to ask about in a few seconds (search
+sharpens in the background). To host your own copy, see [DEPLOY.md](DEPLOY.md).
 
 **Locally** (any public repo):
 

@@ -44,7 +44,9 @@ def _fts_query(q: str) -> str:
 
 class Store:
     def __init__(self, path: str | Path = ":memory:") -> None:
-        self.db = sqlite3.connect(str(path), check_same_thread=False)
+        self.db = sqlite3.connect(str(path), check_same_thread=False, timeout=10)
+        # WAL lets questions read while background embedding writes. (A no-op for :memory:.)
+        self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(
             """
             CREATE TABLE IF NOT EXISTS chunks(
@@ -84,6 +86,40 @@ class Store:
                 progress(min(i + batch, len(chunks)), len(chunks))
         self.db.commit()
 
+    def add_text(self, chunks: list[Chunk]) -> None:
+        """Store chunks for keyword and name search only (no vectors yet). Fast: no model involved."""
+        for c in chunks:
+            cur = self.db.execute(
+                "INSERT INTO chunks(path,start_line,end_line,kind,text,vec,symbol) VALUES(?,?,?,?,?,NULL,?)",
+                (c.path, c.start_line, c.end_line, c.kind, c.text, c.symbol),
+            )
+            self.db.execute("INSERT INTO chunks_fts(rowid,text,path) VALUES(?,?,?)", (cur.lastrowid, c.text, c.path))
+        self.db.commit()
+
+    def pending(self) -> int:
+        return self.db.execute("SELECT COUNT(*) FROM chunks WHERE vec IS NULL").fetchone()[0]
+
+    def embed_pending(
+        self,
+        embedder: Embedder,
+        progress: Callable[[int, int], None] | None = None,
+        embed_chars: int = EMBED_CHARS,
+        batch: int = 16,
+    ) -> None:
+        """Add vectors to chunks that lack them, committing each batch so search improves while this runs."""
+        total, done = self.pending(), 0
+        while True:
+            rows = self.db.execute("SELECT id, path, text FROM chunks WHERE vec IS NULL LIMIT ?", (batch,)).fetchall()
+            if not rows:
+                break
+            vecs = embedder.embed([f"{p}\n{t}"[:embed_chars] for _, p, t in rows])
+            for (rid, _, _), v in zip(rows, vecs, strict=True):
+                self.db.execute("UPDATE chunks SET vec=? WHERE id=?", (v.astype(np.float32).tobytes(), rid))
+            self.db.commit()
+            done += len(rows)
+            if progress:
+                progress(done, total)
+
     def count(self) -> int:
         return self.db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
 
@@ -105,7 +141,7 @@ class Store:
             ):
                 ranks[rid] = ranks.get(rid, 0.0) + 1.0 / (RRF_K + r + 1)
 
-        rows = self.db.execute("SELECT id, vec FROM chunks").fetchall()
+        rows = self.db.execute("SELECT id, vec FROM chunks WHERE vec IS NOT NULL").fetchall()
         if rows:
             ids = np.array([r[0] for r in rows])
             mat = np.vstack([np.frombuffer(r[1], dtype=np.float32) for r in rows])

@@ -85,3 +85,16 @@ The app is for the public, so the hosted copy now lets visitors add any public G
 - **Measured:** a real 162-chunk repo indexed through the server in about 15 s; process peak about 325 MB.
 - **Not measured:** many visitors at once, or a 1,500-chunk repo on the real Render instance. The first real use will tell.
 - **Consequence:** visitor repos vanish when the free service sleeps, so the user may need to add the repo again.
+
+## 36. Ask first, embed in the background (Day 7)
+A user pasting a repo waited about a minute: the embedding model was the cost, and Render's free tier gives a small share of a CPU.
+- Indexing is now two steps. Step 1 (download, split, keyword and name index) makes the repo askable in about 1 to 3 seconds locally.
+  Step 2 computes vectors on a separate single worker; each batch is committed so search improves while it runs.
+- **Measured without a model** (`repopilot eval retrieval --text-only`, 32 positive questions, question text as query):
+  keyword and name search only: hit@1 53%, hit@3 94%, hit@8 100%, MRR 0.715; full index: hit@1 66%, hit@3 88%, hit@8 97%, MRR 0.786.
+  Vectors mainly sharpen the first rank. Replaying the baseline agent's own searches: text only hit@8 94%, MRR 0.712; full 94%, 0.681.
+  Small sample and author-written questions; this says the degraded mode is usable, not that vectors are pointless.
+- Seeded demo repos are fully embedded at build time, so they are unaffected. Visitor repos whose service restarts mid-embedding stay keyword-only (they are evicted on restart anyway).
+- Measured through the real server: markupsafe ready in 0.8 s, Flask (trimmed to 1,500 chunks) in 2.4 s, vectors complete in about 50 s, peak process memory about 350 MB.
+- Not measured: the same on the real Render instance.
+
