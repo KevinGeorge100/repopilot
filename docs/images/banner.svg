@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" role="img" aria-labelledby="t d">
+  <title id="t">RepoPilot</title>
+  <desc id="d">Ask questions about code. Check the answers. A line of code with the cited part highlighted in yellow.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1224"/>
+      <stop offset="1" stop-color="#17205a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.1" r="0.6">
+      <stop offset="0" stop-color="#4b63ff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#4b63ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="340" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="340" rx="20" fill="url(#glow)"/>
+
+  <!-- code window -->
+  <g transform="translate(790 52)">
+    <rect width="420" height="236" rx="14" fill="#080c19" stroke="#2a3366"/>
+    <circle cx="22" cy="22" r="5" fill="#3b4580"/><circle cx="40" cy="22" r="5" fill="#3b4580"/><circle cx="58" cy="22" r="5" fill="#3b4580"/>
+    <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="15">
+      <text x="24" y="66" fill="#5d6a9c">92</text><rect x="62" y="54" width="250" height="16" rx="3" fill="#2a3366"/>
+      <text x="24" y="94" fill="#5d6a9c">93</text><rect x="62" y="82" width="190" height="16" rx="3" fill="#2a3366"/>
+      <rect x="10" y="106" width="400" height="30" rx="4" fill="#ffe15a"/>
+      <text x="24" y="127" fill="#4a3f00">94</text><rect x="62" y="113" width="288" height="16" rx="3" fill="#0d1224" opacity="0.85"/>
+      <rect x="10" y="138" width="400" height="30" rx="4" fill="#ffe15a"/>
+      <text x="24" y="159" fill="#4a3f00">95</text><rect x="62" y="145" width="226" height="16" rx="3" fill="#0d1224" opacity="0.85"/>
+      <text x="24" y="191" fill="#5d6a9c">96</text><rect x="62" y="179" width="270" height="16" rx="3" fill="#2a3366"/>
+      <text x="24" y="219" fill="#5d6a9c">97</text><rect x="62" y="207" width="150" height="16" rx="3" fill="#2a3366"/>
+    </g>
+    <g transform="translate(206 -18)">
+      <rect width="200" height="34" rx="17" fill="#ffffff"/>
+      <text x="20" y="22" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14" fill="#1f36cf">signer.py:94-96</text>
+      <circle cx="176" cy="17" r="9" fill="#0a7550"/>
+      <path d="M171.5 17.5l3 3 5.5-6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <g font-family="'Segoe UI',Helvetica,Arial,sans-serif">
+    <rect x="70" y="62" width="48" height="48" rx="12" fill="#080c19" stroke="#2a3366"/>
+    <rect x="80" y="78" width="26" height="12" rx="3" fill="#ffe15a"/>
+    <rect x="80" y="96" width="30" height="4" rx="2" fill="#8f9bc0"/>
+    <rect x="80" y="70" width="16" height="4" rx="2" fill="#8f9bc0"/>
+    <text x="134" y="98" font-size="34" font-weight="700" fill="#ffffff" letter-spacing="-0.5">RepoPilot</text>
+    <text x="70" y="178" font-size="52" font-weight="800" fill="#ffffff" letter-spacing="-1.5">Ask questions about code.</text>
+    <text x="70" y="240" font-size="52" font-weight="800" fill="#ffe15a" letter-spacing="-1.5">Check the answers.</text>
+    <text x="72" y="286" font-size="19" fill="#b9c3dd">Every answer cites the exact lines. Every citation is verified.</text>
+  </g>
+</svg>
