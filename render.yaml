@@ -1,0 +1,20 @@
+# Render Blueprint: one web service that serves the UI and the API (see DEPLOY.md).
+# Create it from the dashboard: New, then Blueprint, then pick this repository.
+services:
+  - type: web
+    name: repopilot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: REPOPILOT_PROVIDER
+        value: gemini
+      # The only secret. Render asks for it when the Blueprint is applied; it is never stored in git.
+      # Create a free key at https://aistudio.google.com/api-keys
+      - key: GEMINI_API_KEY
+        sync: false
+      # Caps live (uncached) questions per UTC day, so a public link cannot spend the whole free model quota.
+      - key: REPOPILOT_DAILY_ASK_CAP
+        value: "150"

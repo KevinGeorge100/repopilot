@@ -24,6 +24,19 @@ export type AnswerPayload = {
     ok: boolean;
     abstained?: boolean;
   };
+  /** Set when the answer is a stored result from an evaluation run rather than generated just now. */
+  cached?: boolean;
+  source?: { run?: string; model?: string | null; provider?: string | null };
+};
+
+export type DemoRepo = { id: string; name: string; description: string; chunks: number; examples: string[] };
+
+export type Config = {
+  demo: boolean;
+  indexing: boolean;
+  live_questions: boolean;
+  daily_remaining: number;
+  repos: DemoRepo[];
 };
 
 export type Step = { name: string; input: Record<string, unknown>; done: boolean; failed: boolean };

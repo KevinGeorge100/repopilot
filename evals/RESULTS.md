@@ -1,44 +1,46 @@
 # Evaluation results
 
 Dataset v2: 38 questions over 3 repos pinned to exact commits (see `README.md` for method). Model:
-`gemini-3.5-flash-lite` on the Gemini free tier, one run per variant. Cost lines use the model's published paid
+`gemini-3.5-flash-lite` on the Gemini free tier, one run per variant (the final code was run twice). Cost lines use the model's published paid
 price ($0.30 per million input tokens, $2.50 per million output tokens), so they are a what-if: the runs cost nothing.
 
 ## Read this first
 
 - **One run per variant, 38 questions.** A single question is 2.6 points and 4 to 7 questions changed outcome between
-  runs, in both directions. The pass-rate gain is suggestive, not proven. I did not measure run-to-run noise.
+  runs, in both directions. The pass-rate gain is suggestive, not proven. I did not measure run-to-run noise. A second
+  full run on the final code (`v3-final`) reproduced the same three failures as `v2`, which is some evidence the
+  differences are not random flips, but it is not a noise estimate.
 - **The mechanical gains are firm** (questions ending with no answer, repeated searches, tokens): they have clear
   causes visible in the traces.
-- **Two v2 questions are unanswered**: the free tier's daily request quota for this model ran out
-  (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`). They are left out of comparisons, not counted as failures.
-- **The final index was not re-run end to end.** The v2 run used an index that embeds 1500 characters and tags only the
-  first window of a long function. Tagging every window and embedding 1000 characters came afterwards and are
-  validated by the retrieval measurements below, which use no model. An end-to-end re-run waits for quota.
+- **`v3-final` is the run that describes the shipped system**: the final index (every window of a long function tagged,
+  1000 characters embedded, one text per model call) and all fixes, with all 38 questions answered. `v2` ran before
+  the last two index changes, and two of its questions were lost to the free tier's daily quota
+  (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`); those are left out of its comparisons, not counted as failures.
 - **The questions were written by the person who built the system**, from the code at the pinned commits. This is not
   a neutral benchmark.
 
-## Three runs
+## Four runs
 
 Each column uses that run's own answered questions. The paired comparison below uses the same 36 for both sides.
 
-| | baseline | v1: loop fixes | v2: + retrieval |
-|---|---|---|---|
-| Questions answered | 38 | 38 | 36 (2 hit the quota) |
-| Passed | 32/38 (84%) | 33/38 (87%) | 33/36 answered (92%) |
-| Questions that ended with no answer | 3 | 2 | **0** |
-| Repeated tool calls | 19 | 6 | **4** |
-| Tokens in per question | 22,155 | 17,146 | **13,789** |
-| Cost per question (paid-tier price) | $0.0073 | $0.0057 | **$0.0047** |
-| Average cited span | 11.9 lines | 7.8 | **5.2** |
-| Negative questions correct ("not in this repo") | 3/6 | 5/6 | 4/5 answered |
-| Citations the agent had actually read | 98% | 100% | 100% |
-| Citation validity | 100% | 100% | 100% |
-| Steps per question | 3.8 | 3.3 | 3.3 |
-| Latency p50 | 10.0s | 7.9s | 4.0s (mostly provider load) |
+| | baseline | v1: loop fixes | v2: + retrieval | **v3-final: shipped code** |
+|---|---|---|---|---|
+| Questions answered | 38 | 38 | 36 (2 hit the quota) | 38 |
+| Passed | 32/38 (84%) | 33/38 (87%) | 33/36 answered (92%) | **35/38 (92%, 95% CI 79% to 97%)** |
+| Questions that ended with no answer | 3 | 2 | 0 | **0** |
+| Repeated tool calls | 19 | 6 | 4 | **2** |
+| Tokens in per question | 22,155 | 17,146 | 13,789 | **13,452** |
+| Cost per question (paid-tier price) | $0.0073 | $0.0057 | $0.0047 | **$0.0046** |
+| Average cited span | 11.9 lines | 7.8 | 5.2 | **6.8** |
+| Negative questions correct ("not in this repo") | 3/6 | 5/6 | 4/5 answered | **5/6** |
+| Citations the agent had actually read | 98% | 100% | 100% | **100%** |
+| Citation validity | 100% | 100% | 100% | **100%** |
+| Steps per question | 3.8 | 3.3 | 3.3 | **3.3** |
+| Latency p50 | 10.0s | 7.9s | 4.0s | 9.5s (provider load varies a lot between runs) |
 
-On the 36 questions answered in both the baseline and v2: **83% to 92%** passed (5 questions fixed, 2 regressed), tokens
-per question down 39%, cost per question down 36%.
+On all 38 questions, baseline to `v3-final`: **84% to 92%** passed (5 questions fixed, 2 regressed), no question ending
+without an answer (3 before), repeated searches 19 to 2, tokens per question down 39%, cost per question down 37%.
+The three failures (`its-14`, `clk-04`, `clk-11`) are the same ones `v2` had.
 
 ### What each step changed
 

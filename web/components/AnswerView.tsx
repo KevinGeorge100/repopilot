@@ -4,6 +4,23 @@ import remarkGfm from "remark-gfm";
 import type { AnswerPayload, Citation } from "@/lib/types";
 import { citeKey } from "@/lib/types";
 
+// Models often write citations without backticks. Wrap them so each becomes a clickable chip, one per range.
+const BARE = /(^|[\s(\[,;])((?:[\w.-]+\/)*[\w.-]+\.[A-Za-z]\w*):(\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*)(?![\w`])/g;
+
+export function linkify(md: string): string {
+  // split keeps fenced blocks and inline code at odd indexes: those are left exactly as written
+  return md
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((part, i) =>
+      i % 2 === 1
+        ? part
+        : part.replace(BARE, (_m, pre: string, path: string, ranges: string) =>
+            pre + ranges.split(",").map((r) => "`" + path + ":" + r.trim() + "`").join(", "),
+          ),
+    )
+    .join("");
+}
+
 const CITE = /^([\w][\w./-]*\.[A-Za-z]\w*):(\d+)(?:-(\d+))?$/;
 
 export function parseCite(text: string): Citation | null {
@@ -54,7 +71,7 @@ export function AnswerView({ payload, active, onOpen }: Props) {
             },
           }}
         >
-          {payload.answer}
+          {linkify(payload.answer)}
         </ReactMarkdown>
       </div>
       <Verification payload={payload} />
@@ -104,6 +121,11 @@ function Verification({ payload }: { payload: AnswerPayload }) {
       {stopped !== "done" && (
         <p className="text-alert">
           {stopped === "max_steps" ? "The agent ran out of steps before finishing." : "The agent hit its token budget before finishing."} Try a narrower question.
+        </p>
+      )}
+      {payload.cached && (
+        <p>
+          Saved from an evaluation run{payload.source?.model ? ` (model ${payload.source.model})` : ""}, not generated just now.
         </p>
       )}
       <p>

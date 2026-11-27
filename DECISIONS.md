@@ -39,6 +39,11 @@
 
 | 30 | Embed one text per model call (`EMBED_BATCH = 1`). 29.6 vs 10.6 chunks/s on click's chunks, peak memory 280 MB vs 869 MB, identical vectors; click index 185s to 71s | fastembed pads every text in a batch to the longest, so large batches waste most of the work. My earlier 'batch size makes no difference' claim was wrong: I had only compared 16 to 64. Memory is what makes live indexing possible on a 512 MB host | A model whose runtime does not pad |
 
+| 31 | Deploy as ONE Render web service: the Next.js app is exported to static files and served by the API from the same origin | One URL for a resume, no CORS, no second host or account | Traffic needs a CDN or separate scaling |
+| 32 | The hosted demo serves three repos indexed at image build time (`repopilot seed`) and refuses to index new ones (`REPOPILOT_DEMO_MODE`) | Measured: serving peaks at 320 MB, so a 512 MB host works; build-time indexing needs no CPU at runtime and survives the free plan's missing disk | A larger plan makes live indexing safe |
+| 33 | Example questions are real answers copied verbatim from an evaluation run (passing only, at most one negative per repo, provenance kept, one excluded by hand for a misspelled parameter) and labelled as cached; typed questions are answered live under a global daily cap | A public demo must work when the free model quota is spent or the provider returns 503, without faking anything | The model is reliable enough to drop the cache |
+| 34 | Dockerfile verified by reproducing its Python stage in a clean directory (no Docker daemon here); that found a build-breaking bug (LICENSE not copied) | The first Render build should not be the first time the image is exercised | Anyone builds it with Docker and reports back |
+
 ## Free-tier cautions
 - Gemini free-tier traffic may be used for training: index public repos only.
 - `gemini-3.8-flash` hung (read timeout) in testing; `gemini-3.1-flash-lite` answered in <1s. Re-test other models in the Day 6 evals.
@@ -65,5 +70,5 @@
 ## Day 6 findings (evaluation)
 - Full numbers, caveats and reproduction commands: `evals/RESULTS.md`. Method: `evals/README.md`.
 - The free tier has a **daily** per-model request quota (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`) that ended v2 two questions early. Evaluations that need many runs must be spread over days or use a paid key. Providers also return 503 "high demand" in spikes; `--abort-after` stops a run during an outage and the same command resumes.
-- Not yet done: an end-to-end run on the final index (v3: all windows tagged, 1000-char embeddings); a repeat run to measure run-to-run noise; completing slg-06 and slg-09 for v2.
+- Done on Day 7: an end-to-end run on the final code (`v3-final`, 35/38, all 38 answered). Still not done: a proper run-to-run noise estimate (the second full run reproduced the same 3 failures, which is suggestive, not a measurement).
 - Persistent failure `its-14`: the model calls Django-compatible key derivation an "integration".

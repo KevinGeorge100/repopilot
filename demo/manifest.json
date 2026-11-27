@@ -1,0 +1,19 @@
+{
+  "repos": [
+    {
+      "url": "https://github.com/pallets/itsdangerous",
+      "sha": "672971d66a2ef9f85151e53283113f33d642dabd",
+      "description": "Signed values and timestamped tokens for Python. Small and easy to follow."
+    },
+    {
+      "url": "https://github.com/pallets/click",
+      "sha": "08b803cf32ceb2ae6a772c62d5da42757a897d44",
+      "description": "The Python command-line framework. A larger codebase with long classes."
+    },
+    {
+      "url": "https://github.com/sindresorhus/slugify",
+      "sha": "99b35c2b0d6ccfad2b96ba9ce6997c6365b9a4b7",
+      "description": "Turns text into URL slugs, in JavaScript."
+    }
+  ]
+}
