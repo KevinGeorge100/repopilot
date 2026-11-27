@@ -23,9 +23,10 @@ struck through and explained, never silently shown.
 
 ## Try it
 
-**Hosted demo:** see [DEPLOY.md](DEPLOY.md) to put your own copy on Render (the first build takes several minutes). It serves three
-pre-indexed repos so it answers instantly. The example questions are real answers saved from an evaluation run and are
-labelled as such; anything you type is answered live by the model.
+**Live demo: <https://repopilot-wekf.onrender.com>**. It serves three pre-indexed repos. The example questions are real
+answers saved from an evaluation run and are labelled as such; anything you type is answered live by the model, up to a
+daily cap. It runs on Render's free plan, so the first visit after a quiet spell waits tens of seconds for the service
+to wake. To host your own copy, see [DEPLOY.md](DEPLOY.md).
 
 **Locally** (any public repo):
 
