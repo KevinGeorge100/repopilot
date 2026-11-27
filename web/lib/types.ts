@@ -36,6 +36,8 @@ export type Config = {
   indexing: boolean;
   live_questions: boolean;
   daily_remaining: number;
+  indexing_remaining?: number;
+  max_chunks?: number | null;
   repos: DemoRepo[];
 };
 

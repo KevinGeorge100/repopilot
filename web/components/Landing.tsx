@@ -27,6 +27,53 @@ export function Landing({ config, input, setInput, formError, onOpen }: Props) {
         marks the exact lines of code it used, so you can see for yourself that it’s right.
       </p>
 
+      {canIndex ? (
+        <div className="mt-8 max-w-[44rem]">
+          <form
+            className="flex flex-col gap-3 sm:flex-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onOpen(input);
+            }}
+          >
+            <label className="sr-only" htmlFor="repo">
+              Public GitHub repository
+            </label>
+            <input
+              id="repo"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Paste a public GitHub link"
+              autoComplete="off"
+              spellCheck={false}
+              className="min-w-0 flex-1 rounded-md border border-rule bg-sheet px-4 py-3 font-mono text-sm outline-none focus:border-cobalt"
+            />
+            <button type="submit" className="rounded-md bg-ink px-6 py-3 font-semibold text-sheet transition hover:bg-cobalt-ink">
+              Ask about this repo
+            </button>
+          </form>
+          <p className="mt-2 text-sm text-graphite">
+            Takes under a minute for most projects. Very large repos are trimmed to their{" "}
+            {(config?.max_chunks ?? 2500).toLocaleString()} most relevant pieces of code. Or try one of the ready-made
+            projects below.
+          </p>
+          {formError && (
+            <p role="alert" className="mt-3 text-alert">
+              {formError}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-8 max-w-[58ch] text-graphite">
+          This hosted demo answers questions about the repositories below so it can respond instantly. To index any
+          public repo, run RepoPilot yourself: the{" "}
+          <a href={SOURCE_URL} className="text-cobalt-ink underline underline-offset-4">
+            README
+          </a>{" "}
+          has the three commands.
+        </p>
+      )}
+
       {repos.length > 0 && <Stage repos={repos} liveOff={liveOff} onOpenFull={onOpen} />}
 
       {repos.length > 0 && (
@@ -51,47 +98,6 @@ export function Landing({ config, input, setInput, formError, onOpen }: Props) {
         </section>
       )}
 
-      {canIndex ? (
-        <>
-          <form
-            className="mt-9 flex flex-col gap-3 sm:flex-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onOpen(input);
-            }}
-          >
-            <label className="sr-only" htmlFor="repo">
-              GitHub repository
-            </label>
-            <input
-              id="repo"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="github.com/owner/repo"
-              autoComplete="off"
-              spellCheck={false}
-              className="min-w-0 flex-1 rounded-md border border-rule bg-sheet px-4 py-3 font-mono text-sm outline-none focus:border-cobalt"
-            />
-            <button type="submit" className="rounded-md bg-ink px-6 py-3 font-semibold text-sheet transition hover:bg-cobalt-ink">
-              Open repo
-            </button>
-          </form>
-          {formError && (
-            <p role="alert" className="mt-3 text-alert">
-              {formError}
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="mt-8 max-w-[58ch] text-graphite">
-          This hosted demo answers questions about the repositories above so it can respond instantly. To index any
-          public repo, run RepoPilot yourself: the{" "}
-          <a href={SOURCE_URL} className="text-cobalt-ink underline underline-offset-4">
-            README
-          </a>{" "}
-          has the three commands.
-        </p>
-      )}
       {!canIndex && formError && (
         <p role="alert" className="mt-3 text-alert">
           {formError}

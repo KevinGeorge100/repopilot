@@ -33,8 +33,14 @@ fits Render's free 512 MB instance.
   container to start (tens of seconds). Cached example answers are instant once it is up.
 - **First live question.** The embedding model loads on first use, which took about 12 seconds in testing. Memory then
   settles near 320 MB, under the 512 MB limit. Idle and while serving cached answers it uses about 73 MB.
-- **No disk.** Indexes baked into the image survive restarts; anything created while running does not. That is why the
-  demo refuses to index new repos.
+- **No disk.** Indexes baked into the image survive restarts; anything a visitor adds while running does not, so a repo
+  added today may need adding again after the service sleeps. Only the last few added repos are kept
+  (`REPOPILOT_MAX_USER_REPOS`), least recently used first out. The three seeded repos are never removed.
+- **Open mode.** Visitors can add any public GitHub repo. Safety limits: repos are trimmed to `REPOPILOT_MAX_CHUNKS`
+  (1,500) pieces of code, one repo is indexed at a time, each visitor may add 4 per hour and everyone together
+  `REPOPILOT_DAILY_INDEX_CAP` (40) per day. Downloads time out after 2 minutes and are refused above 200 MB. Symlinks in a
+  repo are never followed, so a hostile repo cannot make the server index its own files. Measured: a 162-chunk repo
+  indexed in about 15 seconds with the process peaking near 325 MB.
 - **Model limits.** The free Gemini tier has a daily request quota per model and returns "high demand" errors at times.
   The page turns these into plain messages, and the example questions never depend on the model.
 
@@ -48,8 +54,10 @@ Set these in Render's **Environment** tab. Only `GEMINI_API_KEY` is required.
 | `REPOPILOT_PROVIDER` | `gemini` | `gemini`, `groq`, `openrouter` or `anthropic` (each needs its own key variable). |
 | `REPOPILOT_MODEL` | provider default | Override the model name. |
 | `REPOPILOT_DAILY_ASK_CAP` | `150` | Live questions per UTC day across all visitors. |
-| `REPOPILOT_DEMO_MODE` | `1` in the image | `0` lets visitors index any public repo. Raise the plan's memory and CPU first. |
-| `REPOPILOT_MAX_CHUNKS` | `2500` | With demo mode off, the largest repo a visitor may index. |
+| `REPOPILOT_DEMO_MODE` | `0` in the image | `1` locks the app to the seeded repos only (no visitor indexing). |
+| `REPOPILOT_MAX_CHUNKS` | `1500` in the image | The most pieces of code kept from a visitor's repo. |
+| `REPOPILOT_MAX_USER_REPOS` | `4` in the image | Visitor repos kept on disk at once (least recently used removed). |
+| `REPOPILOT_DAILY_INDEX_CAP` | `40` | New repos accepted per UTC day, across all visitors. |
 | `GITHUB_TOKEN` | none | Raises GitHub's rate limit for pull request review. |
 
 ## Changing the demo repos or examples
@@ -67,8 +75,8 @@ Set these in Render's **Environment** tab. Only `GEMINI_API_KEY` is required.
 - **Landing page shows a plain repo box and no repos.** The API did not find the seeded data. Check that the build log
   shows the three `chunks in ...s` lines from `repopilot seed`, and that `REPOPILOT_WORKDIR` was not overridden.
 - **"Live questions are unavailable".** No model is configured (check `GEMINI_API_KEY`), or today's cap is used up.
-- **Out of memory.** Not seen at 512 MB in testing (peak about 320 MB), but if you turn demo mode off and index large
-  repos, move to a larger plan.
+- **Out of memory.** Not seen at 512 MB in testing (peak about 325 MB while indexing a small repo), but if you raise
+  `REPOPILOT_MAX_CHUNKS` a lot, move to a larger plan.
 
 ## Honest notes on testing
 

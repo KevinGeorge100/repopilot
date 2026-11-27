@@ -46,11 +46,13 @@ RUN repopilot seed --workdir /app/data
 
 COPY --from=web --chown=app:app /web/out ./web-out
 
-# Demo mode: serve the seeded repos, refuse to index new ones (a 512 MB host cannot take arbitrary repos).
+# Open mode: the seeded repos are ready instantly and visitors can add public repos, capped in size, count and per day.
 # Override any of these in the host's environment; GEMINI_API_KEY is the one secret and is never baked in.
 ENV REPOPILOT_WORKDIR=/app/data \
     REPOPILOT_STATIC_DIR=/app/web-out \
-    REPOPILOT_DEMO_MODE=1 \
+    REPOPILOT_DEMO_MODE=0 \
+    REPOPILOT_MAX_CHUNKS=1500 \
+    REPOPILOT_MAX_USER_REPOS=4 \
     PORT=10000
 EXPOSE 10000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \

@@ -5,6 +5,7 @@ import { ReadingTips } from "@/components/Guide";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { Landing, SOURCE_URL } from "@/components/Landing";
 import { Trail } from "@/components/Trail";
+import { friendlyError } from "@/lib/errors";
 import { ask, getConfig, getRepo, startIndex } from "@/lib/api";
 import type { Citation, Config, RepoStatus, Turn } from "@/lib/types";
 import { citeKey } from "@/lib/types";
@@ -15,23 +16,14 @@ const STARTERS = [
   "How does this project handle errors?",
 ];
 
-/** Turn provider and limit errors into something a visitor can act on. */
-function friendlyError(message: string): string {
-  if (/daily limit|429|quota|too many/i.test(message))
-    return "Live questions are paused: the free model quota or today’s limit for this demo is used up. The example questions still work.";
-  if (/503|502|unavailable|high demand|unreachable|timed? ?out/i.test(message))
-    return "The model is busy right now. Try again in a minute, or use one of the example questions.";
-  if (/not configured/i.test(message)) return "Live questions are not set up on this deployment. The example questions still work.";
-  return message;
-}
-
 function toUrl(input: string): string | null {
   const s = input.trim().replace(/^https?:\/\//, "").replace(/^github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
   return /^[\w.-]+\/[\w.-]+$/.test(s) ? `https://github.com/${s}` : null;
 }
 
 function phaseText(r: RepoStatus): string {
-  if (r.status === "queued" || r.status === "cloning") return "Downloading the repository";
+  if (r.status === "queued") return "Waiting for another repository to finish. You are next in line.";
+  if (r.status === "cloning") return "Downloading the repository";
   if (r.status === "chunking") return "Splitting source files into functions and classes";
   if (r.status === "embedding") return `Indexing code: ${r.done} of ${r.total} pieces`;
   return "";
@@ -171,7 +163,7 @@ export default function Home() {
                 style={pct === null ? undefined : { width: `${pct}%` }}
               />
             </div>
-            <p className="mt-3 text-sm text-graphite">Large repositories can take a few minutes the first time.</p>
+            <p className="mt-3 text-sm text-graphite">Most projects take under a minute. Bigger ones can take a few minutes.</p>
           </div>
         )}
       </main>

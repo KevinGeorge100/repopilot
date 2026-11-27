@@ -72,3 +72,16 @@
 - The free tier has a **daily** per-model request quota (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`) that ended v2 two questions early. Evaluations that need many runs must be spread over days or use a paid key. Providers also return 503 "high demand" in spikes; `--abort-after` stops a run during an outage and the same command resumes.
 - Done on Day 7: an end-to-end run on the final code (`v3-final`, 35/38, all 38 answered). Still not done: a proper run-to-run noise estimate (the second full run reproduced the same 3 failures, which is suggestive, not a measurement).
 - Persistent failure `its-14`: the model calls Django-compatible key derivation an "integration".
+
+## 35. Open mode: any public repo, with hard limits (Day 7)
+The app is for the public, so the hosted copy now lets visitors add any public GitHub repo instead of a fixed three.
+- **Found before shipping:** the indexer followed symlinks, so a hostile repo could link to a file on the server (for
+  example `/proc/self/environ`, which holds the model key) and get it indexed and searchable. `read_file` already rejected
+  paths outside the repo; the indexer did not. Fixed twice over: the clone writes symlinks as plain text (`core.symlinks=false`) and the indexer skips
+  symlinks. Tested.
+- **Limits chosen for a free 512 MB instance:** 1,500 chunks per repo, one index job at a time, 4 new repos per visitor per hour,
+  40 new repos per day for everyone, 4 visitor repos on disk (least recently used removed; the three seeded repos are never removed),
+  120 s download timeout, 200 MB working-tree limit, no password prompts for private repos (fail fast).
+- **Measured:** a real 162-chunk repo indexed through the server in about 15 s; process peak about 325 MB.
+- **Not measured:** many visitors at once, or a 1,500-chunk repo on the real Render instance. The first real use will tell.
+- **Consequence:** visitor repos vanish when the free service sleeps, so the user may need to add the repo again.

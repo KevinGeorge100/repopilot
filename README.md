@@ -23,10 +23,11 @@ struck through and explained, never silently shown.
 
 ## Try it
 
-**Live demo: <https://repopilot-wekf.onrender.com>**. It serves three pre-indexed repos. The example questions are real
-answers saved from an evaluation run and are labelled as such; anything you type is answered live by the model, up to a
-daily cap. It runs on Render's free plan, so the first visit after a quiet spell waits tens of seconds for the service
-to wake. To host your own copy, see [DEPLOY.md](DEPLOY.md).
+**Live demo: <https://repopilot-wekf.onrender.com>**. Paste any public GitHub link and ask about it, or start with one
+of three ready-made projects whose example questions are real answers saved from an evaluation run (labelled as such).
+Anything you type is answered live by the model, up to a daily cap. It runs on Render's free plan, so the first visit
+after a quiet spell waits tens of seconds for the service to wake, and new repos are indexed in under a minute for most
+projects. To host your own copy, see [DEPLOY.md](DEPLOY.md).
 
 **Locally** (any public repo):
 
@@ -119,7 +120,8 @@ Set `GITHUB_TOKEN` to raise GitHub's unauthenticated limit (60 requests per hour
 
 - Code snippets are sent to the model provider to write live answers (the free Gemini tier may use them to improve
   Google's products). Do not point this at private code.
-- The hosted demo serves a fixed set of repos so it fits a 512 MB free instance; indexing any repo works locally.
+- The hosted app trims big repos (1,500 pieces of code), keeps only the last few repos people added, and limits how many
+  new repos it takes per day, so it fits a free 512 MB instance. Run it locally for no limits.
 - Evaluation questions were written by the author, one run per variant, on one small model. It is evidence, not proof.
 - The PR-review feature has no screen in the web UI yet; it is available through the CLI, the API and MCP.
 

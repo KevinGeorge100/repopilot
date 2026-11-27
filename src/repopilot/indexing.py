@@ -43,9 +43,12 @@ class IndexManager:
         embedder: Embedder,
         clone_fn: Callable[[str, Path], Path] = clone,
         max_chunks: int | None = None,
+        protected: frozenset[str] = frozenset(),
+        max_user_repos: int = 6,
     ) -> None:
         self.workdir, self.embedder, self.clone_fn = workdir, embedder, clone_fn
         self.max_chunks = max_chunks  # None means the pipeline default; a small host can lower it
+        self.protected, self.max_user_repos = protected, max_user_repos  # protected ids are never evicted
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=1)
@@ -96,6 +99,34 @@ class IndexManager:
             extra = {"max_chunks": self.max_chunks} if self.max_chunks else {}
             summary = build_index(dest, self.db_path(job.id), self.embedder, progress, **extra)
             job.chunks, job.truncated, job.status = summary.chunks, summary.truncated, "ready"
+            self.prune()
         except Exception as e:  # noqa: BLE001 - surface any failure to the caller, never crash the worker
-            job.status, job.error = "error", f"{type(e).__name__}: {str(e)[:200]}"
+            # Our own ValueErrors are written for the user; anything else keeps its type name for debugging.
+            job.status, job.error = "error", str(e)[:200] if isinstance(e, ValueError) else f"{type(e).__name__}: {str(e)[:200]}"
             shutil.rmtree(self.repo_dir(job.id), ignore_errors=True)
+
+    def touch(self, rid: str) -> None:
+        """Mark a repo as recently used, so eviction removes the least recently used one."""
+        try:
+            self.db_path(rid).touch()
+        except (OSError, ValueError):
+            pass
+
+    def prune(self) -> list[str]:
+        """Keep at most max_user_repos non-protected repos on disk (a hosted instance has little of it)."""
+        idx = self.workdir / "index"
+        if not idx.exists():
+            return []
+        mine = [p for p in idx.glob("*.db") if p.stem not in self.protected]
+        mine.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        gone = []
+        for p in mine[self.max_user_repos:]:
+            rid = p.stem
+            job = self._jobs.get(rid)
+            if job and job.status not in ("ready", "error"):
+                continue
+            p.unlink(missing_ok=True)
+            shutil.rmtree(self.workdir / "repos" / rid, ignore_errors=True)
+            self._jobs.pop(rid, None)
+            gone.append(rid)
+        return gone
