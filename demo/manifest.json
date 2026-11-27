@@ -3,17 +3,17 @@
     {
       "url": "https://github.com/pallets/itsdangerous",
       "sha": "672971d66a2ef9f85151e53283113f33d642dabd",
-      "description": "Signed values and timestamped tokens for Python. Small and easy to follow."
+      "description": "Makes sure a piece of data was not changed on its way, for example a login or password-reset link. Small: a good second project."
     },
     {
       "url": "https://github.com/pallets/click",
       "sha": "08b803cf32ceb2ae6a772c62d5da42757a897d44",
-      "description": "The Python command-line framework. A larger codebase with long classes."
+      "description": "Helps Python programs read commands typed in a terminal, like git commit -m. The biggest of the three."
     },
     {
       "url": "https://github.com/sindresorhus/slugify",
       "sha": "99b35c2b0d6ccfad2b96ba9ce6997c6365b9a4b7",
-      "description": "Turns text into URL slugs, in JavaScript."
+      "description": "Turns a title like \u201cHello World!\u201d into a web address like hello-world. Tiny: the easiest place to start."
     }
   ]
 }

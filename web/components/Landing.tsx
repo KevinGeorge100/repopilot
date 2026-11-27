@@ -1,5 +1,6 @@
 import type { Config } from "@/lib/types";
 import { Faq, HowItWorks } from "@/components/Guide";
+import { Stage } from "@/components/Stage";
 
 export const SOURCE_URL = "https://github.com/KevinGeorge100/repopilot";
 
@@ -14,41 +15,38 @@ type Props = {
 export function Landing({ config, input, setInput, formError, onOpen }: Props) {
   const repos = config?.repos ?? [];
   const canIndex = config ? config.indexing : true;
+  const liveOff = config !== null && (!config.live_questions || config.daily_remaining === 0);
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-16 sm:px-6">
-      <p className="mb-10 text-xl font-bold tracking-tight">RepoPilot</p>
-      <h1 className="max-w-[18ch] text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
-        Ask a repo anything. See the lines behind every answer.
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
+      <p className="mb-6 text-xl font-bold tracking-tight">RepoPilot</p>
+      <h1 className="max-w-[20ch] text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl">
+        Ask questions about code. Check the answers.
       </h1>
-      <p className="mt-5 max-w-[52ch] font-serif text-xl leading-relaxed text-graphite">
-        RepoPilot reads the code, answers your question, and checks that every citation points to real lines it
-        actually read. Click a citation to see those lines highlighted in the source.
+      <p className="mt-4 max-w-[56ch] font-serif text-lg sm:text-xl leading-relaxed text-graphite">
+        Opening someone else’s project is confusing: where is anything? RepoPilot answers in plain English and
+        marks the exact lines of code it used, so you can see for yourself that it’s right.
       </p>
 
+      {repos.length > 0 && <Stage repos={repos} liveOff={liveOff} onOpenFull={onOpen} />}
+
       {repos.length > 0 && (
-        <section className="mt-10" aria-label="Repositories ready to explore">
-          <h2 className="text-lg font-semibold tracking-tight">Start with a repo that is already indexed</h2>
-          <ul className="mt-3 divide-y divide-rule border-y border-rule">
-            {repos.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(r.name)}
-                  className="group flex w-full flex-col gap-0.5 px-1 py-3.5 text-left transition hover:bg-sheet sm:flex-row sm:items-baseline sm:gap-6"
-                >
-                  <span className="font-mono text-sm font-medium text-cobalt-ink underline decoration-rule underline-offset-4 group-hover:decoration-cobalt sm:w-56 sm:shrink-0">
-                    {r.name}
-                  </span>
-                  <span className="text-graphite">
-                    {r.description}{" "}
-                    <span className="text-sm">
-                      {r.chunks.toLocaleString()} pieces of code
-                      {r.examples.length > 0 ? `, ${r.examples.length} example questions` : ""}.
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
+        <section className="mt-14" aria-labelledby="who">
+          <h2 id="who" className="text-2xl font-bold tracking-tight">
+            Who it helps
+          </h2>
+          <ul className="mt-4 grid gap-5 sm:grid-cols-3">
+            <li>
+              <p className="font-semibold">You’re learning</p>
+              <p className="mt-1 text-graphite">Read real open-source projects and ask “why is it written this way?” when you’re stuck.</p>
+            </li>
+            <li>
+              <p className="font-semibold">You’re new on a team</p>
+              <p className="mt-1 text-graphite">Find where a feature lives in minutes instead of asking a teammate or searching for an hour.</p>
+            </li>
+            <li>
+              <p className="font-semibold">You’re reviewing a change</p>
+              <p className="mt-1 text-graphite">Get an explanation of what a pull request does, with the changed lines pointed out.</p>
+            </li>
           </ul>
         </section>
       )}
@@ -100,7 +98,7 @@ export function Landing({ config, input, setInput, formError, onOpen }: Props) {
         </p>
       )}
 
-      <HowItWorks />
+      <HowItWorks showSample={repos.length === 0} />
       <Faq />
 
       <p className="mt-16 max-w-[62ch] text-sm text-graphite">
