@@ -52,7 +52,7 @@ function Sample() {
   );
 }
 
-export function HowItWorks() {
+export function HowItWorks({ showSample = true }: { showSample?: boolean }) {
   return (
     <section className="mt-16" aria-labelledby="how">
       <h2 id="how" className="text-2xl font-bold tracking-tight">
@@ -69,7 +69,7 @@ export function HowItWorks() {
           </li>
         ))}
       </ol>
-      <Sample />
+      {showSample && <Sample />}
       <p className="mt-4 max-w-[62ch] text-graphite">
         Before showing an answer, RepoPilot checks every tag: the file exists, the lines are inside it, and the
         AI really read them. A tag that fails is struck through and explained, never hidden.
