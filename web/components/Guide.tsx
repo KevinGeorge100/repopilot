@@ -1,122 +1,64 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Check } from "@/components/ui/Icons";
 
 const STEPS = [
-  {
-    n: "1",
-    title: "Pick a repo and a question",
-    body: "Open one of the ready-made repos and click an example, or type your own question about the code.",
-  },
-  {
-    n: "2",
-    title: "Read the cited answer",
-    body: "Each claim ends in a small tag like signer.py:94-96, the file and line numbers it comes from.",
-  },
-  {
-    n: "3",
-    title: "Click a tag, see the lines",
-    body: "The exact lines light up in the real source on the right, so you can check the answer yourself.",
-  },
+  { n: "1", title: "Pick a project and a question", body: "Open a ready-made project and click an example, or paste your own GitHub link and type a question." },
+  { n: "2", title: "Read the cited answer", body: "Each claim ends in a small tag like signer.py:94-96: the file and the line numbers it came from." },
+  { n: "3", title: "Click a tag, see the lines", body: "The exact lines light up in the real source, so you can check the answer yourself." },
 ];
 
-const SAMPLE = [
-  { n: 94, t: "    :param digest_method: Hash function to use when generating the HMAC" },
-  { n: 95, t: "        signature. Defaults to :attr:`default_digest_method`, which" },
-  { n: 96, t: "        defaults to :func:`hashlib.sha1`. Note that the security of the" },
-];
-
-/** A static, honest picture of what an answer looks like (real lines from the indexed itsdangerous repo). */
-function Sample() {
+export function HowItWorks() {
   return (
-    <figure className="mt-8 rounded-md border border-rule bg-sheet p-4 sm:p-5" aria-label="Example of a cited answer">
-      <figcaption className="text-sm font-semibold text-graphite">What you get back</figcaption>
-      <p className="mt-3 font-serif text-lg leading-relaxed">
-        <span className="font-sans text-sm text-graphite">Q: </span>Which hash does Signer use by default?
-      </p>
-      <p className="mt-2 font-serif text-lg leading-relaxed">
-        <span className="font-sans text-sm text-graphite">A: </span>SHA-1, through <code>hashlib.sha1</code>{" "}
-        <span className="cite" aria-hidden="true">
-          signer.py:94-96
-        </span>
-      </p>
-      <p className="mt-4 text-sm text-graphite">Clicking the tag shows the source, with those lines marked:</p>
-      <pre className="mt-2 overflow-x-auto rounded border border-rule bg-paper py-2 font-mono text-xs leading-6">
-        {SAMPLE.map((l) => (
-          <div key={l.n} className="flex whitespace-pre bg-marker/70">
-            <span className="w-10 shrink-0 select-none pr-3 text-right text-graphite">{l.n}</span>
-            <span>{l.t}</span>
-          </div>
-        ))}
-      </pre>
-    </figure>
-  );
-}
-
-export function HowItWorks({ showSample = true }: { showSample?: boolean }) {
-  return (
-    <section className="mt-16" aria-labelledby="how">
-      <h2 id="how" className="text-2xl font-bold tracking-tight">
-        How it works
-      </h2>
-      <ol className="mt-5 grid gap-6 sm:grid-cols-3">
-        {STEPS.map((s) => (
-          <li key={s.n}>
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink font-mono text-sm text-sheet">
-              {s.n}
-            </span>
-            <h3 className="mt-2 font-semibold">{s.title}</h3>
-            <p className="mt-1 text-graphite">{s.body}</p>
-          </li>
-        ))}
-      </ol>
-      {showSample && <Sample />}
-      <p className="mt-4 max-w-[62ch] text-graphite">
-        Before showing an answer, RepoPilot checks every tag: the file exists, the lines are inside it, and the
-        AI really read them. A tag that fails is struck through and explained, never hidden.
-      </p>
+    <section id="how" className="section" aria-labelledby="how-h">
+      <div className="shell">
+        <h2 id="how-h" className="t-h2 max-w-[22ch]">
+          How it works
+        </h2>
+        <ol className="mt-8 grid gap-4 md:grid-cols-3">
+          {STEPS.map((s) => (
+            <li key={s.n} className="card p-5 sm:p-6">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-marker font-mono text-sm font-semibold text-on-marker">{s.n}</span>
+              <h3 className="t-h3 mt-4">{s.title}</h3>
+              <p className="mt-2 text-muted">{s.body}</p>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-6 flex max-w-[70ch] items-start gap-2 text-muted">
+          <Check className="mt-1 shrink-0 text-verified" size={18} />
+          <span>Before an answer is shown, RepoPilot checks every tag: the file exists, the lines are inside it, and the AI really read them. A tag that fails is struck through and explained, never hidden.</span>
+        </p>
+      </div>
     </section>
   );
 }
 
 const FAQ = [
-  {
-    q: "What is this good for?",
-    a: "Getting oriented in unfamiliar code fast: where something happens, how a feature works, why a function exists. Every answer points at the lines, so you spend time reading code, not guessing.",
-  },
-  {
-    q: "Why only three repos?",
-    a: "This free hosted copy has limited memory, so it comes with three small open-source repos already indexed (itsdangerous, click and slugify). To use any public repo, run RepoPilot yourself: the README has three commands.",
-  },
-  {
-    q: "What are the example questions?",
-    a: "Real answers saved from an evaluation run, labelled as such, so they load instantly. Anything you type yourself is answered live by the model.",
-  },
-  {
-    q: "Can I trust the answers?",
-    a: "Check them: that is the point of the citations. On a 38-question test over these repos, 35 passed. The failures and the limits of that test are written up in the evaluation results.",
-  },
-  {
-    q: "Is my data kept?",
-    a: "RepoPilot’s server does not save your questions. The code around your question is sent to an AI provider to write a live answer, so do not point this at private code.",
-  },
+  { q: "What is this good for?", a: "Getting oriented in unfamiliar code fast: where something happens, how a feature works, why a function exists. Every answer points at the lines, so you spend your time reading code, not guessing." },
+  { q: "Can I use any repo?", a: "Any public GitHub repo. Paste the link and you can ask in a few seconds while search sharpens in the background. Very large repos are trimmed to their most relevant code, and this free hosted copy keeps only the last few repos people added." },
+  { q: "What are the example answers?", a: "Real answers saved from a test run, labelled as such, so they load instantly. Anything you type yourself is answered live by the model." },
+  { q: "Can I trust the answers?", a: "Check them: that is the point of the tags. On a 38-question test over three projects, 35 were right. I wrote those questions myself, and the failures are written up in the evaluation results." },
+  { q: "Is my data kept?", a: "RepoPilot’s server does not save your questions. The code around your question is sent to an AI provider to write a live answer, so do not point this at private code." },
 ];
 
 export function Faq() {
   return (
-    <section className="mt-14" aria-labelledby="faq">
-      <h2 id="faq" className="text-2xl font-bold tracking-tight">
-        Good to know
-      </h2>
-      <div className="mt-4 divide-y divide-rule border-y border-rule">
-        {FAQ.map((f) => (
-          <details key={f.q} className="group py-3">
-            <summary className="cursor-pointer list-none font-semibold marker:content-none">
-              <span className="mr-2 inline-block text-cobalt-ink transition group-open:rotate-90">›</span>
-              {f.q}
-            </summary>
-            <p className="mt-2 max-w-[62ch] pl-5 text-graphite">{f.a}</p>
-          </details>
-        ))}
+    <section id="faq" className="section" aria-labelledby="faq-h">
+      <div className="shell max-w-3xl">
+        <h2 id="faq-h" className="t-h2">
+          Good to know
+        </h2>
+        <div className="mt-6 divide-y divide-line border-y border-line">
+          {FAQ.map((f) => (
+            <details key={f.q} className="group py-1">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 rounded-md py-2 font-semibold marker:content-none hover:text-link">
+                <span aria-hidden className="inline-block text-link transition-transform duration-200 group-open:rotate-90">›</span>
+                {f.q}
+              </summary>
+              <p className="max-w-[64ch] pb-3 pl-6 text-muted">{f.a}</p>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -136,12 +78,11 @@ export function ReadingTips({ forceOpen, onDismiss }: { forceOpen: boolean; onDi
   }, []);
   if (hidden && !forceOpen) return null;
   return (
-    <aside className="mb-6 max-w-[68ch] rounded-md border border-rule bg-sheet px-4 py-3 text-sm" aria-label="How to read an answer">
+    <aside className="card rise mb-6 max-w-[68ch] px-4 py-3 text-sm" aria-label="How to read an answer">
       <p className="font-semibold">How to read an answer</p>
-      <ul className="mt-1.5 list-disc space-y-1 pl-5 text-graphite">
+      <ul className="mt-1.5 list-disc space-y-1 pl-5 text-muted">
         <li>
-          Tags like <span className="cite">file.py:10-20</span> are the evidence. Click one to see those lines
-          highlighted on the right.
+          Tags like <span className="cite">file.py:10-20</span> are the evidence. Click one to see those lines highlighted.
         </li>
         <li>The steps above an answer show what the AI searched and read before it answered.</li>
         <li>A struck-through tag means the check failed. Don’t rely on that claim.</li>
@@ -157,7 +98,7 @@ export function ReadingTips({ forceOpen, onDismiss }: { forceOpen: boolean; onDi
             /* ignore */
           }
         }}
-        className="mt-2 text-cobalt-ink underline underline-offset-4"
+        className="press mt-2 inline-flex min-h-11 items-center text-link underline underline-offset-4"
       >
         Got it, hide this
       </button>

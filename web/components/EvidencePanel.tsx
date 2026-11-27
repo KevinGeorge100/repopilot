@@ -18,6 +18,7 @@ export function EvidencePanel({ repo, sources, active, onSelect, onClose }: Prop
   const [win, setWin] = useState<FileWindow | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const hitRef = useRef<HTMLDivElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const key = active ? citeKey(active) : null;
 
   useEffect(() => {
@@ -38,7 +39,8 @@ export function EvidencePanel({ repo, sources, active, onSelect, onClose }: Prop
   }, [repo, key]);
 
   useEffect(() => {
-    hitRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    const box = boxRef.current;
+    if (box && hitRef.current) box.scrollTop = Math.max(0, hitRef.current.offsetTop - box.clientHeight / 3);
   }, [win]);
 
   if (!active) {
@@ -91,17 +93,17 @@ export function EvidencePanel({ repo, sources, active, onSelect, onClose }: Prop
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto bg-sheet py-3 font-mono text-[0.8rem] leading-6">
-        {err && <p className="px-4 font-sans text-alert">Couldn’t load this file: {err}</p>}
-        {!err && !win && <p className="px-4 font-sans text-graphite">Loading lines</p>}
+      <div ref={boxRef} tabIndex={0} role="region" aria-label={`Source code: ${active.path}`} className="relative min-h-0 flex-1 overflow-auto bg-night py-3 font-mono text-[0.8rem] leading-6">
+        {err && <p className="px-4 font-sans text-code-ink">Couldn’t load this file: {err}</p>}
+        {!err && !win && <p className="px-4 font-sans text-code-ink">Loading lines…</p>}
         {win?.lines.map((line, idx) => {
           const n = win.start + idx;
           const hit = n >= active.start && n <= active.end;
           const ref = hit && firstHit ? ((firstHit = false), hitRef) : undefined;
           return (
             <div key={n} ref={ref} className="code-line" data-hit={hit}>
-              <span className="num">{n}</span>
-              <span className="txt">{line || " "}</span>
+              <span className="gutter">{n}</span>
+              <span>{line || " "}</span>
             </div>
           );
         })}

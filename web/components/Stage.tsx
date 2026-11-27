@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnswerView } from "@/components/AnswerView";
+import { Arrow } from "@/components/ui/Icons";
+import { Button } from "@/components/ui/Button";
 import { friendlyError } from "@/lib/errors";
 import { ask, getLines, type FileWindow } from "@/lib/api";
 import type { AnswerPayload, Citation, DemoRepo } from "@/lib/types";
@@ -14,10 +16,11 @@ function level(chunks: number): string {
   return "Bigger";
 }
 
-function CodeWindow({ repo, cite }: { repo: string; cite: Citation | null }) {
+export function CodeWindow({ repo, cite }: { repo: string; cite: Citation | null }) {
   const [win, setWin] = useState<FileWindow | null>(null);
   const [err, setErr] = useState(false);
   const hit = useRef<HTMLDivElement | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
   const key = cite ? `${cite.path}:${cite.start}-${cite.end}` : "";
 
   useEffect(() => {
@@ -32,16 +35,18 @@ function CodeWindow({ repo, cite }: { repo: string; cite: Citation | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, key]);
 
+  // Scroll only inside the code window. scrollIntoView would also scroll the whole page, which is jarring
+  // when an answer arrives while the visitor is reading something else.
   useEffect(() => {
-    hit.current?.scrollIntoView({ block: "nearest" });
+    if (box.current && hit.current) box.current.scrollTop = Math.max(0, hit.current.offsetTop - 72);
   }, [win]);
 
   let first = true;
   let n = -1;
   return (
-    <div className="flex h-full min-h-[18rem] flex-col overflow-hidden rounded-lg bg-night text-sm shadow-[0_24px_60px_-28px_rgba(16,21,40,0.7)]">
+    <div className="flex h-full min-h-[18rem] flex-col overflow-hidden rounded-lg bg-night text-sm shadow-[var(--shadow-lg)] ring-1 ring-white/5">
       <div className="flex items-baseline justify-between gap-3 border-b border-white/10 px-4 py-2.5">
-        <span className="truncate font-mono text-xs text-mist" title={cite?.path}>
+        <span className="truncate font-mono text-xs text-code-ink" title={cite?.path}>
           {cite ? cite.path : "The source code appears here"}
         </span>
         {cite && (
@@ -51,13 +56,16 @@ function CodeWindow({ repo, cite }: { repo: string; cite: Citation | null }) {
           </span>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto py-2 font-mono text-[0.8rem] leading-6" aria-live="polite">
-        {!cite && (
-          <p className="max-w-[30ch] px-5 py-8 font-sans text-base text-mist">
-            Pick a question, then click a tag in the answer. The lines it came from get marked here.
-          </p>
+      <div ref={box} tabIndex={0} role="region" aria-label={cite ? `Source code: ${cite.path}` : "Source code"} className="relative min-h-0 flex-1 overflow-auto py-2 font-mono text-[0.8rem] leading-6" aria-live="polite">
+        {!cite && <p className="max-w-[30ch] px-5 py-8 font-sans text-base text-code-ink">Pick a question, then click a tag in the answer. The lines it came from get marked here.</p>}
+        {cite && err && <p className="px-5 py-8 font-sans text-code-ink">Couldn’t load those lines. Try another tag.</p>}
+        {cite && !err && !win && (
+          <div className="space-y-2 px-5 py-4" aria-hidden>
+            {[60, 85, 40, 72].map((w) => (
+              <div key={w} className="skeleton h-3 opacity-30" style={{ width: `${w}%` }} />
+            ))}
+          </div>
         )}
-        {cite && err && <p className="px-5 py-8 font-sans text-mist">Couldn’t load those lines. Try another tag.</p>}
         {win &&
           win.lines.map((text, i) => {
             const ln = win.start + i;
@@ -65,13 +73,7 @@ function CodeWindow({ repo, cite }: { repo: string; cite: Citation | null }) {
             if (isHit) n += 1;
             const ref = isHit && first ? ((first = false), hit) : undefined;
             return (
-              <div
-                key={`${key}-${ln}`}
-                ref={ref}
-                className="code-line"
-                data-hit={isHit}
-                style={isHit ? ({ "--i": n } as React.CSSProperties) : undefined}
-              >
+              <div key={`${key}-${ln}`} ref={ref} className="code-line" data-hit={isHit} style={isHit ? ({ "--i": n } as React.CSSProperties) : undefined}>
                 <span className="gutter">{ln}</span>
                 <span>{text || " "}</span>
               </div>
@@ -96,38 +98,35 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
   cache.current = answers;
   const repo = repos.find((r) => r.id === repoId) ?? sorted[0];
 
-  const choose = useCallback(
-    async (id: string, question: string, auto = false) => {
-      if (!auto) touched.current = true;
-      const k = `${id}|${question}`;
-      setRepoId(id);
-      setQ(question);
-      setCite(null);
-      const have = cache.current[k];
-      if (have && have !== "loading" && !("error" in have)) {
-        setCite(have.citations.valid[0] ?? null);
-        return;
-      }
-      setAnswers((a) => ({ ...a, [k]: "loading" }));
-      let got: AnswerPayload | null = null;
-      let failure = "Couldn’t get an answer. Try another question.";
-      try {
-        await ask(id, question, {
-          onToolCall: () => {},
-          onToolResult: () => {},
-          onRepair: () => {},
-          onAnswer: (p) => (got = p),
-          onError: (m) => (failure = friendlyError(m)),
-        });
-      } catch (e) {
-        failure = friendlyError((e as Error).message);
-      }
-      const ans = got as AnswerPayload | null;
-      setAnswers((a) => ({ ...a, [k]: ans ?? { error: failure } }));
-      if (ans && !(auto && touched.current)) setCite(ans.citations.valid[0] ?? null);
-    },
-    [],
-  );
+  const choose = useCallback(async (id: string, question: string, auto = false) => {
+    if (!auto) touched.current = true;
+    const k = `${id}|${question}`;
+    setRepoId(id);
+    setQ(question);
+    setCite(null);
+    const have = cache.current[k];
+    if (have && have !== "loading" && !("error" in have)) {
+      setCite(have.citations.valid[0] ?? null);
+      return;
+    }
+    setAnswers((a) => ({ ...a, [k]: "loading" }));
+    let got: AnswerPayload | null = null;
+    let failure = "Couldn’t get an answer. Try another question.";
+    try {
+      await ask(id, question, {
+        onToolCall: () => {},
+        onToolResult: () => {},
+        onRepair: () => {},
+        onAnswer: (p) => (got = p),
+        onError: (m) => (failure = friendlyError(m)),
+      });
+    } catch (e) {
+      failure = friendlyError((e as Error).message);
+    }
+    const ans = got as AnswerPayload | null;
+    setAnswers((a) => ({ ...a, [k]: ans ?? { error: failure } }));
+    if (ans && !(auto && touched.current)) setCite(ans.citations.valid[0] ?? null);
+  }, []);
 
   // One orchestrated moment on arrival: the first example answers itself and its lines get marked.
   useEffect(() => {
@@ -147,7 +146,7 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
   const answer = state && state !== "loading" && !("error" in state) ? state : null;
 
   return (
-    <section aria-label="Try it" className="mt-8 rounded-xl border border-rule bg-sheet p-3 sm:p-5">
+    <div className="card p-3 sm:p-5 lg:p-6">
       <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Choose a project">
         {sorted.map((r) => (
           <button
@@ -160,28 +159,30 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
               setQ(null);
               setCite(null);
             }}
-            className={`rounded-full border px-3.5 py-1.5 text-sm transition ${
-              r.id === repo.id ? "border-ink bg-ink text-sheet" : "border-rule text-ink hover:border-ink"
+            className={`press inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm ${
+              r.id === repo.id ? "border-ink bg-ink text-bg" : "border-line-strong text-ink hover:border-ink"
             }`}
           >
             <span className="font-mono">{r.name.split("/")[1]}</span>
-            <span className={r.id === repo.id ? "ml-2 text-mist" : "ml-2 text-graphite"}>{level(r.chunks)}</span>
+            <span className={r.id === repo.id ? "opacity-75" : "text-muted"}>{level(r.chunks)}</span>
           </button>
         ))}
       </div>
-      <p className="mt-3 max-w-[64ch] text-graphite">{repo.description}</p>
+      <p className="mt-3 max-w-[70ch] text-muted">{repo.description}</p>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-6">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-graphite">Click a question</p>
-          <ul className="mt-2 flex flex-col gap-1.5">
+          <p className="text-sm font-semibold text-muted" id="stage-q-label">
+            Click a question
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5" aria-labelledby="stage-q-label">
             {repo.examples.map((ex) => (
               <li key={ex}>
                 <button
                   onClick={() => choose(repo.id, ex)}
                   aria-pressed={q === ex}
-                  className={`w-full rounded-md border px-3 py-2 text-left font-serif text-[1.02rem] leading-snug transition ${
-                    q === ex ? "border-cobalt bg-white text-ink" : "border-transparent text-cobalt-ink hover:border-rule hover:bg-white"
+                  className={`press w-full rounded-md border px-3.5 py-2.5 text-left font-serif text-[1.05rem] leading-snug ${
+                    q === ex ? "border-primary bg-surface-2 text-ink" : "border-transparent text-link hover:border-line hover:bg-surface-2"
                   }`}
                 >
                   {ex}
@@ -207,41 +208,49 @@ export function Stage({ repos, liveOff, onOpenFull }: Props) {
               maxLength={1000}
               autoComplete="off"
               placeholder={liveOff ? "Live questions are paused right now" : "Or type your own question"}
-              className="min-w-0 flex-1 rounded-md border border-rule bg-white px-3 py-2 outline-none focus:border-cobalt disabled:bg-paper"
+              className="min-h-11 min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-3 text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/20 disabled:bg-surface-2"
             />
-            <button
-              type="submit"
-              disabled={liveOff || typed.trim().length < 3 || state === "loading"}
-              className="rounded-md bg-ink px-4 py-2 font-semibold text-sheet transition hover:bg-cobalt-ink disabled:bg-rule disabled:text-graphite"
-            >
+            <Button type="submit" disabled={liveOff || typed.trim().length < 3 || state === "loading"}>
               Ask
-            </button>
+            </Button>
           </form>
-          <div className="mt-4 min-h-[5rem]" aria-live="polite">
-            {state === "loading" && <p className="text-graphite">Reading the code…</p>}
-            {state && state !== "loading" && "error" in state && <p role="alert" className="text-alert">{state.error}</p>}
-            {answer && (
-              <AnswerView payload={answer} active={cite} onOpen={(c) => setCite(c)} />
+          <div className="mt-4 min-h-[6rem]" aria-live="polite">
+            {state === "loading" && (
+              <div role="status" aria-label="Reading the code">
+                <p className="text-sm text-muted">Reading the code…</p>
+                <div className="mt-3 space-y-2.5" aria-hidden>
+                  <div className="skeleton h-3.5 w-[92%]" />
+                  <div className="skeleton h-3.5 w-[78%]" />
+                  <div className="skeleton h-3.5 w-[60%]" />
+                </div>
+              </div>
             )}
-            {!q && <p className="text-graphite">The answer will show up here, with tags you can click.</p>}
+            {state && state !== "loading" && "error" in state && (
+              <p role="alert" className="text-alert">
+                {state.error}
+              </p>
+            )}
+            {answer && (
+              <div key={k} className="rise">
+                <AnswerView payload={answer} active={cite} onOpen={(c) => setCite(c)} />
+              </div>
+            )}
+            {!q && <p className="text-muted">The answer shows up here, with tags you can click.</p>}
           </div>
         </div>
-        <CodeWindow repo={repo.id} cite={cite} />
+        <div className="lg:sticky lg:top-24 lg:self-start lg:h-[26rem]">
+          <CodeWindow repo={repo.id} cite={cite} />
+        </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-4">
-        <p className="max-w-[56ch] text-sm text-graphite">
-          {liveOff
-            ? "The example answers are saved from a test run. Live questions are paused right now."
-            : "The example answers are saved from a test run. Questions you type are answered live."}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <p className="t-small max-w-[58ch] text-muted">
+          {liveOff ? "The example answers are saved from a test run. Live questions are paused right now." : "The example answers are saved from a test run. Questions you type are answered live."}
         </p>
-        <button
-          onClick={() => onOpenFull(repo.name)}
-          className="rounded-md bg-ink px-5 py-2.5 font-semibold text-sheet transition hover:bg-cobalt-ink"
-        >
-          Open {repo.name.split("/")[1]} in the full app
-        </button>
+        <Button variant="secondary" onClick={() => onOpenFull(repo.name)}>
+          Open {repo.name.split("/")[1]} in the full app <Arrow size={18} />
+        </Button>
       </div>
-    </section>
+    </div>
   );
 }
